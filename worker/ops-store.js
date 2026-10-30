@@ -219,6 +219,7 @@ async function load(db, hh, op, memberId) {
       for (const itemId of Object.keys(s.items)) await loadInto(db, hh, s, "pantry", "item_id = ? AND deleted_at IS NULL", itemId);
       break;
     case "item.again":
+    case "item.rename":
     case "item.low":
     case "item.not_yet":
       await loadInto(db, hh, s, "items", "id = ?", String(op.item_id));

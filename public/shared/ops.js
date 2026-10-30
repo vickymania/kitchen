@@ -37,7 +37,7 @@ export const OP_TYPES = [
   "recipe.put", "recipe.delete",
   "entry.add", "entry.update", "entry.check", "entry.delete", "entry.clear_checked",
   "member.update",
-  "product.put", "product.shelf", "item.prefer", "item.again", "item.low", "item.not_yet", "item.shelf", "item.rate", "rating.set", "receipt.save", "purchase.add", "purchase.delete",
+  "product.put", "product.shelf", "item.prefer", "item.again", "item.rename", "item.low", "item.not_yet", "item.shelf", "item.rate", "rating.set", "receipt.save", "purchase.add", "purchase.delete",
   "recipe.cooked", "recipe.uncooked", "recipe.cook_prompt", "recipe.rate",
   "preference.set", "preference.clear",
   "pantry.add", "pantry.update", "pantry.use", "pantry.unuse", "pantry.remove", "pantry.pend", "pantry.unpend",
@@ -1143,6 +1143,22 @@ const HANDLERS = {
 
   // "Weer nodig" scope per item: 'hide', 'show', or null to let the rule decide
   // (public/shared/again-scope.js).
+  // Tidy an item's shown name (30-10-2026: "Knoflookpoeder?" is no name
+  // for a thing). Only spelling the key ignores (case, "?", punctuation) may
+  // change, so every alias, import and list line still finds it.
+  "item.rename"(state, op, ctx) {
+    const item = state.items[id(op.item_id, "item_id")];
+    if (!item || item.deleted_at) throw new OpError("not_found", "item");
+    const name = text(op.name, 120, "name");
+    if (!name) throw new OpError("name_required", "name");
+    if (nameKey(name) !== nameKey(item.name)) throw new OpError("bad_field", "name");
+    if (item.name !== name) {
+      item.name = name;
+      ctx.touch("items", item.id);
+    }
+    return {};
+  },
+
   "item.again"(state, op, ctx) {
     const item = state.items[id(op.item_id, "item_id")];
     if (!item || item.deleted_at) throw new OpError("not_found", "item");

@@ -114,3 +114,12 @@ test("credits: a link or just a name", () => {
   assert.equal(code(() => run(s, { type: "recipe.put", id: "recipe-cred1", recipe: { source_url: "https://x" } })), "bad_field");
   assert.equal(code(() => run(s, { type: "recipe.put", id: "recipe-cred1", recipe: { source_url: "a".repeat(121) } })), "bad_field");
 });
+
+test("item.rename tidies the shown name only", () => {
+  const code = (fn) => { try { fn(); } catch (e) { assert.ok(e instanceof OpError); return e.code; } return null; };
+  const s = emptyState();
+  run(s, { type: "entry.add", id: "entry-rn001", item_id: "item-rn001", title: "Kaneelpoeder?" });
+  run(s, { type: "item.rename", item_id: "item-rn001", name: "Kaneelpoeder" });
+  assert.equal(s.items["item-rn001"].name, "Kaneelpoeder");
+  assert.equal(code(() => run(s, { type: "item.rename", item_id: "item-rn001", name: "Kaneel" })), "bad_field", "another word is a merge, not a rename");
+});
