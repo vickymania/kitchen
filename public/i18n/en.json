@@ -47,6 +47,8 @@
     "facet": { "meal": "Meal", "cuisine": "Cuisine", "main": "Main ingredient", "time": "Time" }
   },
   "recipe": {
+    "unlinked": "Not linked: {reason}.",
+    "unlinked_aria": "Why not linked?",
     "minutes": "{n} min",
     "product_pick": "pick a product",
     "servings": { "one": "1 serving", "other": "{n} servings" },
@@ -379,6 +381,10 @@
     "reason": "★{stars}"
   },
   "review": {
+    "change_recipe": "{name}: {linked} of {total} ingredients linked",
+    "undo_recipe": "Something wrong? Say so and I will fix it.",
+    "link_to": "'{name}' → {item} ({how})",
+    "link_none": "'{name}': {reason}",
     "label": "Night check",
     "title": "Night check {date}",
     "errors": "Error in the run",
@@ -388,7 +394,18 @@
     "none": "No night check yet.",
     "more": { "one": "and 1 more", "other": "and {n} more" },
     "open": "View",
-    "seen": "Seen"
+    "seen": "Seen",
+    "changes": "What it did",
+    "changes_none": "It has not changed anything itself yet.",
+    "changes_new": {"one": "Changed 1 thing itself last night.", "other": "Changed {n} things itself last night."},
+    "change_merge": "{name} merged into {target}",
+    "change_move": "{name} moved to {target}",
+    "change_alias": "{name} now also means {target}",
+    "change_rename": "{name} is now called {target}",
+    "undo_merge": "Cannot be undone. Say so and I will split it.",
+    "undo_move": "Undo: open the product, Belongs to something else…",
+    "undo_alias": "Undo: open the product, Other names, ×.",
+    "undo_rename": "Say so if the old name must come back."
   },
   "prices": { "label": "Prices", "of": "prices of {day}" },
   "cooked": {
@@ -773,5 +790,6 @@
     "jar": { "one": "jar", "other": "jars" },
     "bottle": { "one": "bottle", "other": "bottles" },
     "bowl": { "one": "tray", "other": "trays" }
-  }
+  },
+  "link": {"how": {"exact": "same name", "same": "same product", "number": "singular or plural", "plain": "without an extra word", "compound": "a kind of it", "general": "more general", "parts": "per part"}, "reason": {"excluded": "on the never-suggest list", "tap": "tap water", "tool": "a tool, not stock", "several": "names several things", "never": "no item yet, never bought"}}
 }

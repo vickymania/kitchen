@@ -1,7 +1,7 @@
 // D1 side of the op engine: load the rows an op needs, run public/shared/ops.js
 // on them, and write back what changed in one atomic batch, together with the
 // household's new change counter. Also serves the "what changed since N" pull.
-import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, findItem, aliasTarget } from "../public/shared/ops.js";
+import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, findItem, aliasTarget, AUTO_CHANGES_DAYS } from "../public/shared/ops.js";
 import { nameKey } from "../public/shared/ingredients.js";
 import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pendingEventId } from "../public/shared/pantry.js";
 import { addDays } from "../public/shared/shelf-life.js";
@@ -13,12 +13,12 @@ const TABLE = {
   products: "products", ratings: "ratings", purchases: "purchases", receipts: "receipts", cooks: "cooks",
   offers: "offers", preferences: "preferences", pantry: "pantry", pantry_events: "pantry_events",
   deal_rules: "deal_rules", pending_takes: "pending_takes", cook_prompts: "cook_prompts", recipe_ratings: "recipe_ratings", aliases: "item_aliases", store_prices: "store_prices",
-  reviews: "reviews",
+  reviews: "reviews", auto_changes: "auto_changes",
 };
 const JSON_FIELDS = {
-  recipes: ["ingredients", "steps", "nutrition", "meals"], entries: ["amounts", "sources"], items: [], members: [],
+  recipes: ["ingredients", "steps", "nutrition", "meals", "ingredient_links"], entries: ["amounts", "sources"], items: [], members: [],
   products: [], ratings: [], purchases: [], receipts: ["lines"], cooks: [], offers: [], preferences: [], pantry: [], pantry_events: ["rate_before"], deal_rules: ["match_words", "require_words", "exclude_words"],
-  pending_takes: [], cook_prompts: ["entry_ids"], recipe_ratings: [], aliases: [], store_prices: [], reviews: ["fixed", "decide", "errors"],
+  pending_takes: [], cook_prompts: ["entry_ids"], recipe_ratings: [], aliases: [], store_prices: [], reviews: ["fixed", "decide", "errors"], auto_changes: ["lines"],
 };
 
 // The columns an op may write. Members only change name and language through
@@ -26,7 +26,7 @@ const JSON_FIELDS = {
 const COLUMNS = {
   recipes: ["id", "title", "servings", "ingredients", "steps", "notes", "nutrition", "photo", "source_url",
     "cuisine", "main_ingredient", "time_class", "time_minutes", "meals", "labels_by",
-    "created_by", "created_at", "updated_at", "deleted_at"],
+    "created_by", "created_at", "updated_at", "deleted_at", "ingredient_links"],
   entries: ["id", "item_id", "title", "typed", "new_item", "amounts", "note", "sources", "added_by", "checked_at", "checked_by",
     "created_at", "updated_at", "deleted_at"],
   items: ["id", "name", "name_key", "preferred_product_id", "again", "low_at", "low_off", "not_yet_until",
@@ -52,15 +52,16 @@ const COLUMNS = {
   aliases: ["id", "item_id", "name", "name_key", "created_by", "created_at", "updated_at", "deleted_at"],
   store_prices: ["id", "product_id", "store", "name", "size", "price_cents", "price_on", "created_at", "updated_at", "deleted_at"],
   reviews: ["id", "day", "run_ok", "fixed", "decide", "errors", "turns", "cost_cents", "created_at", "updated_at", "deleted_at"],
+  auto_changes: ["id", "day", "what", "name", "target", "item_id", "product_id", "reason", "lines", "created_at", "updated_at", "deleted_at"],
 };
 
 // Synced to the phones (pull), in this order. Offers are written by
 // worker/offers.js, never by an op.
-const SYNCED = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews"];
+const SYNCED = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes"];
 
 // What a recipes-only person (members.recipes_only) pulls: the book, the
 // stars, and the people's names for them. Never the list, the pantry, the
-// purchases, receipts, offers, preferences, prices, cook records or nightly reports.
+// purchases, receipts, offers, preferences, prices, cook records, nightly reports or their changelog.
 export const GUEST_SYNCED = ["recipes", "members", "recipe_ratings"];
 const GUEST_MEMBER_FIELDS = ["id", "name", "removed_at"];
 
@@ -437,7 +438,8 @@ async function load(db, hh, op, memberId) {
       break;
     case "recipe.put":
     case "recipe.delete":
-      await loadInto(db, hh, s, "recipes", "id = ?", String(op.id));
+    case "recipe.links":
+      await loadInto(db, hh, s, "recipes", "id = ?", String(op.type === "recipe.links" ? op.recipe_id : op.id));
       break;
     case "entry.add":
     case "entry.update":
@@ -500,6 +502,10 @@ async function load(db, hh, op, memberId) {
     case "review.save":
       // The day's own row, tombstone too (a second run that day replaces it).
       await loadInto(db, hh, s, "reviews", "id = ?", `review-${String(op.day ?? "")}`);
+      // The changelog rows past AUTO_CHANGES_DAYS, to tombstone.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(op.day ?? ""))) {
+        await loadInto(db, hh, s, "auto_changes", "deleted_at IS NULL AND day < ?", addDays(String(op.day), -AUTO_CHANGES_DAYS));
+      }
       break;
     default:
       break;
@@ -562,7 +568,7 @@ function unknownShelfProducts(state, changed) {
 /**
  * Apply a phone's ops in order. Each op is atomic on its own; one bad op does
  * not stop the ones after it.
- * ctx: { householdId, memberId, isAdmin }
+ * ctx: { householdId, memberId, isAdmin, role }
  * hooks.unknownShelf: a Set that gets the ids of items bought or put in the
  * pantry without a shelf life (worker/shelf.js); hooks.unknownShelfProducts
  * the ids of products bought on a receipt without one. hooks.unknownKind: a Set
@@ -586,7 +592,8 @@ export async function applyOps(db, ctx, ops, hooks = {}) {
       const state = await load(db, hh, op, ctx.memberId);
       let outcome;
       try {
-        outcome = applyOp(state, op, { memberId: ctx.memberId, isAdmin: ctx.isAdmin, now: new Date().toISOString() });
+        // The reviewer device's (the nightly check's) changes go into its changelog (auto_changes).
+        outcome = applyOp(state, op, { memberId: ctx.memberId, isAdmin: ctx.isAdmin, now: new Date().toISOString(), autoLog: ctx.role === "reviewer" });
       } catch (e) {
         if (!(e instanceof OpError)) throw e;
         results.push({ op_id: opId, ok: false, error: e.code });
@@ -636,5 +643,7 @@ export async function pull(db, hh, since, { guest = false } = {}) {
   const out = { rev, full };
   kinds.forEach((kind, i) => { out[kind] = results[i].results.map((r) => fromRow(kind, r)); });
   if (guest) out.members = out.members.map((m) => Object.fromEntries(GUEST_MEMBER_FIELDS.map((f) => [f, m[f] ?? null])));
+  // Which item each recipe line means is the household's (30-10-2026): never a guest's.
+  if (guest) out.recipes = out.recipes.map(({ ingredient_links, ...r }) => r);
   return out;
 }

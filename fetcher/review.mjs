@@ -5,7 +5,12 @@
 // (mcp/server.mjs, with the reviewer device's own token) and answers a short
 // report, which this file stores in review-state/ and sends as review.save.
 //
-//   node fetcher/review.mjs prepare [--force]   once a day: write review-state/prompt.txt
+//   node fetcher/review.mjs prepare [--force]   once a day: first the deterministic fixes
+//                                               (runNightlyFixes: CLEAR duplicate items merged,
+//                                               question-mark names tidied, at most
+//                                               NIGHTLY_MERGE_MAX / NIGHTLY_RENAME_MAX, new DOUBT
+//                                               groups as questions; review-state/fixes.json),
+//                                               then write review-state/prompt.txt
 //                                               (fetcher/review-prompt.md + the optional
 //                                               fetcher/review-household.md + the inputs)
 //                                               and review-state/mcp.json; exit 3 when
@@ -30,6 +35,11 @@ import { pairDevice } from "./fetch.mjs";
 import { NEW_PURCHASES_FILE } from "../tools/import_ah.mjs";
 import { localToday } from "../public/shared/intervals.js";
 import { REVIEW_MAX_LINES, REVIEW_LINE_MAX } from "../public/shared/ops.js";
+import { planGroups, nightlyPlan, familyMembers, NIGHTLY_MERGE_MAX, NIGHTLY_RENAME_MAX } from "../public/shared/dedupe.js";
+import { householdDefaults, mergeOpId, stateOf } from "../tools/dedupe_items.mjs";
+import { stableId } from "../tools/import_todo.mjs";
+import { linkRecipe, linksStale } from "../public/shared/recipe-links.js";
+import { createHash } from "node:crypto";
 
 const HOME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 try {
@@ -116,10 +126,11 @@ export function newPurchases(home = HOME, now = Date.now()) {
   return text.length > PURCHASE_CHARS ? `${text.slice(0, PURCHASE_CHARS)}\n(cut off)` : text;
 }
 
-/** The prompt: fetcher/review-prompt.md with today, the log tail and the new purchases filled in. */
-export function buildPrompt({ template, today, log: tail, purchases, household = "" }) {
+/** The prompt: fetcher/review-prompt.md with today, the log tail, the new purchases and tonight's own fixes filled in. */
+export function buildPrompt({ template, today, log: tail, purchases, household = "", fixes = "" }) {
   return template
     .replace("{{TODAY}}", today)
+    .replace("{{FIXES}}", fixes.trim() || "(none)")
     .replace("{{HOUSEHOLD}}", household.trim() || "(none)")
     .replace("{{LOG}}", ["```", tail || "(empty)", "```"].join("\n"))
     .replace("{{PURCHASES}}", ["```", purchases || "(none)", "```"].join("\n"));
@@ -138,11 +149,156 @@ export function mcpConfig(home = HOME, origin = ORIGIN) {
   };
 }
 
+/** Did today's check run already (review-state/last-day)? */
+export function ranToday({ stateDir = STATE_DIR, today = localToday() } = {}) {
+  const dayFile = path.join(stateDir, "last-day");
+  return fs.existsSync(dayFile) && fs.readFileSync(dayFile, "utf8").trim() === today;
+}
+
+/* ----------------------------------------- the deterministic fixes */
+
+/** The file tonight's fixes are kept in, read again by save. */
+export const FIXES_FILE = "fixes.json";
+/** The DOUBT groups already put in front of the household, so each is asked once. */
+export const DOUBT_SEEN_FILE = "doubt-seen.json";
+/** At most this many new DOUBT groups asked a night. */
+export const DOUBT_MAX = 5;
+/** At most this many recipes (re)linked a night; the rest the next night. */
+export const RECIPE_LINK_MAX = 20;
+
+/**
+ * The recipe.links ops for every live recipe whose stored links are missing,
+ * made for an older version, or differ from today's answer (a new item, an
+ * alias), at most `max`, longest waiting first; plus the lines no item was
+ * found for ("never"), for Claude to look at. Op ids are stable per answer:
+ * the same answer again is a replay.
+ */
+export function recipeLinkOps(data, { max = RECIPE_LINK_MAX } = {}) {
+  const ops = [], unlinked = [];
+  const recipes = Object.values(data.recipes ?? {}).filter((r) => !r.deleted_at)
+    .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)) || a.id.localeCompare(b.id));
+  for (const r of recipes) {
+    if (ops.length >= max) break;
+    const lines = linkRecipe(r, data);
+    if (!lines.length || !linksStale(r, lines)) continue;
+    const hash = createHash("sha256").update(JSON.stringify([r.id, r.updated_at, lines])).digest("hex").slice(0, 24);
+    ops.push({ op_id: `op-rl-${hash}`, type: "recipe.links", recipe_id: r.id, at: r.updated_at ?? null, lines, note: r.title });
+    for (const l of lines) if (l.reason === "never") unlinked.push(`${r.title}: ${l.name}`);
+  }
+  return { ops, unlinked };
+}
+
+const nameList = (names) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} en ${names.at(-1)}` : names[0] ?? "");
+
+/**
+ * Tonight's fixes from a full sync, by the rules of tools/dedupe_items.mjs
+ * (public/shared/dedupe.js), never by Claude's judgement: the CLEAR groups'
+ * merges (nightlyPlan: pairwise clear, never an excluded item, at most
+ * `max`) with the tool's own op ids, the tidy spellings (item.rename), and
+ * as questions the DOUBT groups (and held pairs) not in `seen` yet, at most
+ * DOUBT_MAX. `seen` null is the first run: every group there is now is
+ * recorded, none asked (the old ones wait on the backlog already).
+ */
+export function nightlyFixes(sync, { targets = [], excludes = [], today = localToday(), seen = null, max = NIGHTLY_MERGE_MAX, maxRenames = NIGHTLY_RENAME_MAX } = {}) {
+  const data = stateOf(sync);
+  const groups = planGroups(data, { targets, excludes });
+  const plan = nightlyPlan(groups, { max, maxRenames });
+  const name = (id) => groups.facts[id]?.item.name ?? data.items[id]?.name ?? id;
+  const ops = [
+    ...plan.renames.map((r) => ({ op_id: stableId("op", `nightly_rename:${r.id}:${r.name}`), type: "item.rename", item_id: r.id, name: r.name, note: `${r.was} -> ${r.name}` })),
+    ...plan.merges.map((m) => ({ op_id: mergeOpId(m.from, m.into), type: "item.merge", from_item_id: m.from, into_item_id: m.into, on: today, note: `${name(m.from)} -> ${name(m.into)}` })),
+  ];
+  const asks = [
+    ...groups.doubt.map((f) => {
+      const names = [name(f.target), ...familyMembers(f).map(name).sort((a, b) => a.localeCompare(b, "nl"))];
+      return { key: `doubt:${[...names].sort().join("|")}`, text: `${nameList(names)} samenvoegen?` };
+    }),
+    ...plan.held.map((h) => ({ key: `held:${name(h.from)}>${name(h.into)}`, text: `${name(h.from)} samenvoegen met ${name(h.into)}?` })),
+  ];
+  const known = new Set(seen ?? asks.map((a) => a.key));
+  const fresh = asks.filter((a) => !known.has(a.key)).slice(0, DOUBT_MAX);
+  return { ops, decide: fresh.map((a) => a.text), seen: [...new Set([...known, ...fresh.map((a) => a.key)])], left: plan.left };
+}
+
+function readJson(file, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Runs tonight's fixes against the app with the reviewer token: one op per
+ * request (one refusal never stops the others; 429 is the day's cap), then
+ * keeps what happened in review-state/fixes.json: { day, done: [notes],
+ * decide, errors }. The changes themselves land in the app's changelog
+ * (auto_changes), written by the worker. Never throws: a failure is an error line.
+ */
+export async function runNightlyFixes({ home = HOME, stateDir = STATE_DIR, today = localToday(), origin = ORIGIN, get = fetch, post = fetch, token = null, say = log, household = null } = {}) {
+  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  const out = { day: today, done: [], decide: [], errors: [], unlinked: [] };
+  try {
+    const bearer = token ?? readReviewerToken(path.join(home, "reviewer-token"));
+    const res = await get(`${origin}/api/sync?since=0`, { headers: { Authorization: `Bearer ${bearer}` } });
+    if (!res.ok) throw new Error(`/api/sync: ${res.status}`);
+    const sync = await res.json();
+    const { TARGETS, EXCLUDES } = household ?? await householdDefaults();
+    const seenFile = path.join(stateDir, DOUBT_SEEN_FILE);
+    const fixes = nightlyFixes(sync, { targets: TARGETS, excludes: EXCLUDES, today, seen: readJson(seenFile, null) });
+    out.decide = fixes.decide;
+    for (const op of fixes.ops) {
+      const { note, ...sent } = op;
+      const r = await post(`${origin}/api/ops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${bearer}` },
+        body: JSON.stringify({ ops: [sent] }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.status === 429) { say("merge cap reached"); break; }
+      if (r.ok && body.results?.[0]?.ok) out.done.push(note);
+      else out.errors.push(`Nachtcontrole kon niet aanpassen: ${note.replace(" -> ", " naar ")}.`);
+    }
+    fs.writeFileSync(seenFile, JSON.stringify(fixes.seen, null, 1));
+    // Recipes: which item each line means, on the items as they are after the merges.
+    const after = await get(`${origin}/api/sync?since=0`, { headers: { Authorization: `Bearer ${bearer}` } });
+    if (!after.ok) throw new Error(`/api/sync: ${after.status}`);
+    const links = recipeLinkOps(stateOf(await after.json()));
+    out.unlinked = links.unlinked.slice(0, 60);
+    for (const op of links.ops) {
+      const { note, ...sent } = op;
+      const r = await post(`${origin}/api/ops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${bearer}` },
+        body: JSON.stringify({ ops: [sent] }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok && body.results?.[0]?.ok) out.done.push(`linked recipe ${note}`);
+      else out.errors.push(`Nachtcontrole kon ${note} niet koppelen.`);
+    }
+    say(`fixes: ${out.done.length} done (${fixes.ops.length} planned, ${fixes.left} for later), ${out.decide.length} new questions, ${out.errors.length} refused`);
+  } catch (e) {
+    out.errors.push("Nachtcontrole kon niet samenvoegen.");
+    say("fixes FAILED", e.message);
+  }
+  fs.writeFileSync(path.join(stateDir, FIXES_FILE), JSON.stringify(out, null, 2));
+  return out;
+}
+
+/** Tonight's fixes for the prompt, so Claude does not ask about them again; and the recipe lines no item was found for. */
+export function fixesText(fixes) {
+  return [
+    ...(fixes?.done ?? []).map((d) => `- done: ${d}`),
+    ...(fixes?.decide ?? []).map((d) => `- asked already: ${d}`),
+    ...(fixes?.unlinked ?? []).map((u) => `- recipe line without an item: ${u}`),
+  ].join("\n");
+}
+
 /** Once a day: writes prompt.txt and mcp.json. Returns false when today's check already ran. */
-export function prepare({ home = HOME, stateDir = STATE_DIR, today = localToday(), force = false, now = Date.now() } = {}) {
+export function prepare({ home = HOME, stateDir = STATE_DIR, today = localToday(), force = false, now = Date.now(), fixes = null } = {}) {
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const dayFile = path.join(stateDir, "last-day");
-  if (!force && fs.existsSync(dayFile) && fs.readFileSync(dayFile, "utf8").trim() === today) return false;
+  if (!force && ranToday({ stateDir, today })) return false;
   fs.writeFileSync(dayFile, `${today}\n`);
   let logText = "";
   try {
@@ -158,7 +314,7 @@ export function prepare({ home = HOME, stateDir = STATE_DIR, today = localToday(
   } catch {
     // none: the general rules only
   }
-  fs.writeFileSync(path.join(stateDir, "prompt.txt"), buildPrompt({ template, today, log: lastRunLog(logText, today), purchases: newPurchases(home, now), household }));
+  fs.writeFileSync(path.join(stateDir, "prompt.txt"), buildPrompt({ template, today, log: lastRunLog(logText, today), purchases: newPurchases(home, now), household, fixes: fixesText(fixes) }));
   fs.writeFileSync(path.join(stateDir, "mcp.json"), JSON.stringify(mcpConfig(home), null, 2));
   return true;
 }
@@ -293,6 +449,13 @@ export async function save({ exitCode = 0, home = HOME, stateDir = STATE_DIR, to
     // none
   }
   const { ok, failure, meta, report } = readReport(raw, { exitCode, tail, stderr });
+  // Tonight's own fixes (runNightlyFixes): their questions and refusals go first.
+  const fixes = readJson(path.join(stateDir, FIXES_FILE), null);
+  if (fixes?.day === today) {
+    report.decide = [...(fixes.decide ?? []).map(clip), ...report.decide].filter(Boolean).slice(0, REVIEW_MAX_LINES);
+    report.errors = [...(fixes.errors ?? []).map(clip), ...report.errors].filter(Boolean).slice(0, REVIEW_MAX_LINES);
+    if (report.errors.length) report.run_ok = false;
+  }
   fs.writeFileSync(path.join(stateDir, "last.json"), JSON.stringify({ day: today, exit: exitCode, failure, ...meta, ...report }, null, 2));
   fs.writeFileSync(path.join(stateDir, "last.txt"), `${reportText(today, report)}\n`);
   say(`claude exit ${exitCode}, ${ok ? "report" : `no report (${failure})`}; turns ${meta.turns ?? "?"}, cost $${meta.cost_usd?.toFixed(3) ?? "?"}; `
@@ -312,9 +475,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const mode = process.argv[2];
   try {
     if (mode === "prepare") {
-      if (!prepare({ force: process.argv.includes("--force") })) {
+      if (!process.argv.includes("--force") && ranToday()) {
         log("already ran today");
         process.exitCode = 3;
+      } else {
+        const fixes = await runNightlyFixes();
+        prepare({ force: true, fixes });
       }
     } else if (mode === "save") {
       await save({ exitCode: Number(process.argv[3] ?? 0) || 0 });

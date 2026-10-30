@@ -103,9 +103,11 @@ test("reviewer: reads /api/sync and sends an alias, a product move by id and its
   assert.equal(all.reviews.length, 1);
 });
 
-test("reviewer: every other op, a removed name, a move by title, a merge and an excluded thing are refused whole", async () => {
+test("reviewer: every other op, a removed name, a move by title, a merge of two things and an excluded thing are refused whole", async () => {
   const { env, thomas, reviewer } = await setup();
   const { tonijn, minoes } = await seed(env, thomas);
+  const wasmiddel = "item-review-wasmiddel";
+  assert.equal((await call(env, "POST", "/api/ops", { cookie: thomas, body: { ops: [{ op_id: opId(), type: "entry.add", id: "entry-review-wasm1", item_id: wasmiddel, title: "Wasmiddel" }] } })).status, 200);
   for (const type of OP_TYPES.filter((t) => !["item.alias", "product.move", "review.save"].includes(t))) {
     const res = await call(env, "POST", "/api/ops", { bearer: reviewer, body: { ops: [{ op_id: opId(), type, id: "x-review-000001" }] } });
     assert.equal(res.status, 403, `the reviewer may not send ${type}`);
@@ -113,10 +115,13 @@ test("reviewer: every other op, a removed name, a move by title, a merge and an 
   const refused = [
     [{ type: "item.alias", item_id: minoes.id, name: "Tonijn", remove: true }, "remove a name"],
     [{ type: "product.move", product_id: "ah-product-tonijn-water", title: "Kattenvoer nieuw", on: localToday() }, "make an item by moving to a title"],
-    [{ type: "item.merge", from_item_id: tonijn.id, into_item_id: minoes.id, on: localToday() }, "merge items"],
+    [{ type: "item.merge", from_item_id: tonijn.id, into_title: "Minoestuna", into_item_id: minoes.id, on: localToday() }, "merge into a title"],
+    [{ type: "item.rename", item_id: tonijn.id, name: "Tonijn?" }, "rename to a question mark"],
+    // Not Tonijn into the cat's tuna: the household's SAME names may make that one product (public/shared/item-names.js).
+    [{ type: "item.merge", from_item_id: tonijn.id, into_item_id: wasmiddel, on: localToday() }, "merge items that are not one thing", true],
   ];
-  for (const [op, why] of refused) {
-    assert.equal(reviewerMayApply(op), false, why);
+  for (const [op, why, shapeOk = false] of refused) {
+    assert.equal(reviewerMayApply(op), shapeOk, why);
     const res = await call(env, "POST", "/api/ops", { bearer: reviewer, body: { ops: [{ ...op, op_id: opId() }] } });
     assert.equal(res.status, 403, `the reviewer may not ${why}`);
   }
@@ -130,7 +135,7 @@ test("reviewer: every other op, a removed name, a move by title, a merge and an 
   // One bad op refuses the batch before anything is applied.
   const mixed = [
     { op_id: opId(), type: "item.alias", id: "alias-review-0002", item_id: minoes.id, name: "Poezentonijn" },
-    { op_id: opId(), type: "item.merge", from_item_id: tonijn.id, into_item_id: minoes.id, on: localToday() },
+    { op_id: opId(), type: "item.merge", from_item_id: tonijn.id, into_item_id: wasmiddel, on: localToday() },
   ];
   assert.equal((await call(env, "POST", "/api/ops", { bearer: reviewer, body: { ops: mixed } })).status, 403);
   const all = await (await call(env, "GET", "/api/sync?since=0", { cookie: thomas })).json();
@@ -391,7 +396,9 @@ test("MCP with the reviewer's token file: recent purchases, a product moved (nev
 
     assert.match((await client.tool("kitchen_product_move", { product_id: "ah-product-groene-ster", item: "Minoestuna" })).text, /never-suggest list, never touched/);
     assert.match((await client.tool("kitchen_product_move", { product_id: "ah-product-tonijn-water", item: "Kattenvoer" })).text, /No item "Kattenvoer"/);
-    const merge = await client.tool("kitchen_item_merge", { from: "Tonijn", into: "Minoestuna" });
+    await fetch(`${live.origin}/api/ops`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${live.thomas}` },
+      body: JSON.stringify({ ops: [{ op_id: "op-review-mcp-wasm", type: "entry.add", id: "entry-review-mcp-wasm", item_id: "item-review-mcp-wasm", title: "Wasmiddel" }] }) });
+    const merge = await client.tool("kitchen_item_merge", { from: "Tonijn", into: "Wasmiddel" });
     assert.deepEqual([merge.error, /403/.test(merge.text)], [true, true], "the server refuses a merge from the reviewer");
     const alias = await client.tool("kitchen_item_alias", { item: "Minoestuna", name: "Kattentonijn" });
     assert.match(alias.text, /"Kattentonijn" now means Minoestuna/);

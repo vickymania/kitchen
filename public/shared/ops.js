@@ -10,7 +10,7 @@
 // not follow.
 //
 // State: { recipes, items, entries, members, products, ratings, purchases, receipts, cooks, preferences,
-// pantry, pantry_events, deal_rules, pending_takes, cook_prompts, recipe_ratings, store_prices, reviews }
+// pantry, pantry_events, deal_rules, pending_takes, cook_prompts, recipe_ratings, store_prices, reviews, auto_changes }
 // each {id: row}. Rows hold parsed JSON (ingredients, steps, amounts, sources,
 // lines), not strings.
 import { UNIT_CODES, nameKey, mergeAmounts } from "./ingredients.js";
@@ -24,6 +24,7 @@ import { isKind, kindFromCategory, kindFromName } from "./product-kinds.js";
 import { canonicalName } from "./item-names.js";
 import { aliasTarget, itemsNamed, findItem } from "./item-find.js";
 import { learnRate, onOffer, earlierPurchases } from "./rate-learning.js";
+import { LINK_HOWS, LINK_REASONS } from "./recipe-links.js";
 import { PRICE_STORE_NAMES, MAX_PRICE_WRITES, checkPriceRows, matchStorePrices, storePriceId } from "./store-prices.js";
 
 export class OpError extends Error {
@@ -44,10 +45,10 @@ export const OP_TYPES = [
   "deal_rule.set", "deal_rule.clear",
   "item.merge", "product.move", "item.alias",
   "prices.sync",
-  "review.save",
+  "review.save", "recipe.links",
 ];
 
-export const KINDS = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews"];
+export const KINDS = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes"];
 
 export function emptyState() {
   return Object.fromEntries(KINDS.map((k) => [k, {}]));
@@ -63,6 +64,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** The nightly report (review.save): at most this many lines per list, each this long. */
 export const REVIEW_MAX_LINES = 30;
 export const REVIEW_LINE_MAX = 300;
+/** The nightly changelog (auto_changes) keeps this many days; review.save tombstones older rows. */
+export const AUTO_CHANGES_DAYS = 60;
 
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const PHOTO_RE = /^p\/[A-Za-z0-9_-]{8,64}\.(jpg|webp|png)$/;
@@ -1918,7 +1921,40 @@ const HANDLERS = {
     if (row.turns !== null) row.turns = Math.round(row.turns);
     state.reviews[rid] = row;
     ctx.touch("reviews", rid);
+    // The changelog keeps AUTO_CHANGES_DAYS days: older rows become tombstones.
+    const cutoff = addDays(day, -AUTO_CHANGES_DAYS);
+    for (const c of Object.values(state.auto_changes ?? {})) {
+      if (c.deleted_at || !(c.day < cutoff)) continue;
+      c.deleted_at = ctx.now;
+      c.updated_at = ctx.now;
+      ctx.touch("auto_changes", c.id);
+    }
     return { id: rid };
+  },
+
+  // Which item each ingredient line of a recipe means, or why none
+  // (public/shared/recipe-links.js), from the nightly check only (worker/api.js
+  // REVIEWER_ONLY_OPS). Stored on the recipe as ingredient_links { at, lines }
+  // for the recipe version `at` (its updated_at); the recipe itself, its
+  // updated_at included, stays as it is.
+  "recipe.links"(state, op, ctx) {
+    const r = state.recipes[id(op.recipe_id, "recipe_id")];
+    if (!r || r.deleted_at) throw new OpError("not_found", "recipe");
+    if (!Array.isArray(op.lines) || op.lines.length > 200) throw new OpError("bad_field", "lines");
+    const lines = op.lines.map((l) => {
+      if (!l || typeof l !== "object") throw new OpError("bad_field", "lines");
+      const name = text(l.name, 120, "lines.name");
+      if (l.item_id !== null && l.item_id !== undefined) {
+        if (!LINK_HOWS.includes(l.how)) throw new OpError("bad_field", "lines.how");
+        return { name, item_id: id(l.item_id, "lines.item_id"), item: text(l.item, 300, "lines.item"), how: l.how };
+      }
+      if (!LINK_REASONS.includes(l.reason)) throw new OpError("bad_field", "lines.reason");
+      return { name, item_id: null, reason: l.reason };
+    });
+    const at = typeof op.at === "string" ? op.at.slice(0, 40) : null;
+    r.ingredient_links = { at, lines };
+    ctx.touch("recipes", r.id);
+    return { linked: lines.filter((l) => l.item_id).length, lines: lines.length };
   },
 
   // Two items of one thing become one (30-10-2026: the receipts put
@@ -2117,6 +2153,64 @@ export function applyOp(state, op, ctx) {
       }
     },
   };
+  const before = ctx.autoLog ? beforeChange(state, op) : null;
   const result = HANDLERS[op.type](state, op, full);
+  if (ctx.autoLog) logChange(state, op, result, before, full);
   return { result, changed };
+}
+
+/** Ops whose effect the nightly check's changelog records (auto_changes). */
+export const LOGGED_OPS = ["item.merge", "product.move", "item.alias", "item.rename", "recipe.links"];
+
+/** What a logged op's row needs from before it ran: the merged item's or the renamed item's name. */
+function beforeChange(state, op) {
+  if (op.type === "item.merge" || op.type === "item.rename") {
+    return { name: state.items[op.type === "item.merge" ? op.from_item_id : op.item_id]?.name ?? "" };
+  }
+  return {};
+}
+
+/** A product as the changelog names it: "Tonijn in water (AH)", the brand only when its name lacks it. */
+export function changeProductName(p) {
+  const name = String(p?.name ?? "").trim();
+  const brand = String(p?.brand ?? "").trim();
+  return brand && !nameKey(name).startsWith(nameKey(brand)) ? `${name} (${brand})` : name;
+}
+
+/**
+ * One changelog row for an op of the reviewer device (ctx.autoLog, set by
+ * worker/ops-store.js for the role 'reviewer' only) that changed something:
+ * a replay, an alias it had, a move with nothing to move or the same
+ * spelling writes none. Row id "ac-<op_id>".
+ */
+function logChange(state, op, result, before, ctx) {
+  if (!LOGGED_OPS.includes(op.type) || !result || result.already) return;
+  let row = null;
+  if (op.type === "item.merge") {
+    row = { what: "merge", name: before.name, target: state.items[result.item_id]?.name ?? "", item_id: result.item_id ?? null, product_id: null };
+  } else if (op.type === "product.move") {
+    if (!Object.values(result.moved ?? {}).some((n) => n > 0)) return;
+    const p = state.products[op.product_id];
+    row = { what: "move", name: changeProductName(p), target: state.items[result.item_id]?.name ?? "", item_id: result.item_id ?? null, product_id: p?.id ?? null };
+  } else if (op.type === "item.alias") {
+    if (op.remove === true || !result.alias_id) return;
+    const item = aliasTarget(state.items, state.items[op.item_id]);
+    // `reason`: why the check thinks so ("spelling"), a few words, only for the changelog.
+    row = { what: "alias", name: String(op.name ?? "").trim(), target: item?.name ?? "", item_id: item?.id ?? null, product_id: null,
+      reason: typeof op.reason === "string" ? op.reason.replace(/\s+/g, " ").trim().slice(0, 60) || null : null };
+  } else if (op.type === "item.rename") {
+    const item = state.items[op.item_id];
+    if (!item || item.name === before.name) return;
+    row = { what: "rename", name: before.name, target: item.name, item_id: item.id, product_id: null };
+  } else if (op.type === "recipe.links") {
+    const r = state.recipes[op.recipe_id];
+    const lines = r?.ingredient_links?.lines ?? [];
+    row = { what: "recipe", name: r?.title ?? "", target: `${result.linked}/${result.lines}`, item_id: null, product_id: null, lines };
+  }
+  if (!row?.name) return;
+  if (!state.auto_changes) state.auto_changes = {};
+  const rid = `ac-${typeof op.op_id === "string" && op.op_id ? op.op_id : `${op.type}-${ctx.now}`}`;
+  const day = typeof op.on === "string" && DATE_RE.test(op.on) ? op.on : String(ctx.now).slice(0, 10);
+  state.auto_changes[rid] = { id: rid, day, reason: null, lines: null, ...row, created_at: ctx.now, updated_at: ctx.now, deleted_at: null };
+  ctx.touch("auto_changes", rid);
 }

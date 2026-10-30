@@ -47,6 +47,8 @@
     "facet": { "meal": "Maaltijd", "cuisine": "Keuken", "main": "Hoofdingrediënt", "time": "Tijd" }
   },
   "recipe": {
+    "unlinked": "Niet gekoppeld: {reason}.",
+    "unlinked_aria": "Waarom niet gekoppeld?",
     "minutes": "{n} min",
     "product_pick": "product kiezen",
     "servings": { "one": "1 persoon", "other": "{n} personen" },
@@ -379,6 +381,10 @@
     "reason": "★{stars}"
   },
   "review": {
+    "change_recipe": "{name}: {linked} van {total} ingrediënten gekoppeld",
+    "undo_recipe": "Klopt iets niet? Zeg het, dan pas ik het aan.",
+    "link_to": "'{name}' → {item} ({how})",
+    "link_none": "'{name}': {reason}",
     "label": "Nachtcontrole",
     "title": "Nachtcontrole {date}",
     "errors": "Fout in de run",
@@ -388,7 +394,18 @@
     "none": "Nog geen nachtcontrole.",
     "more": { "one": "en nog 1", "other": "en nog {n}" },
     "open": "Bekijk",
-    "seen": "Gezien"
+    "seen": "Gezien",
+    "changes": "Wat hij deed",
+    "changes_none": "Hij heeft nog niets zelf aangepast.",
+    "changes_new": {"one": "Vannacht 1 ding zelf aangepast.", "other": "Vannacht {n} dingen zelf aangepast."},
+    "change_merge": "{name} samengevoegd met {target}",
+    "change_move": "{name} verplaatst naar {target}",
+    "change_alias": "{name} is nu ook een naam voor {target}",
+    "change_rename": "{name} heet nu {target}",
+    "undo_merge": "Kan niet terug. Zeg het, dan maak ik het los.",
+    "undo_move": "Terug: product openen, Hoort bij iets anders…",
+    "undo_alias": "Terug: product openen, Andere namen, ×.",
+    "undo_rename": "Zeg het als de oude naam terug moet."
   },
   "prices": { "label": "Prijzen", "of": "prijzen van {day}" },
   "cooked": {
@@ -773,5 +790,6 @@
     "jar": { "one": "pot", "other": "potten" },
     "bottle": { "one": "fles", "other": "flessen" },
     "bowl": { "one": "bakje", "other": "bakjes" }
-  }
+  },
+  "link": {"how": {"exact": "zelfde naam", "same": "zelfde product", "number": "enkelvoud of meervoud", "plain": "zonder bijwoord", "compound": "een soort ervan", "general": "algemener", "parts": "per deel"}, "reason": {"excluded": "op de nooit-voorstellen-lijst", "tap": "water uit de kraan", "tool": "hulpmiddel, geen voorraad", "several": "noemt meerdere dingen", "never": "nog geen item, nooit gekocht"}}
 }

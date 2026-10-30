@@ -6,7 +6,7 @@ import { t, formatDate } from "./i18n.js";
 import { api, isOffline } from "./api.js";
 import * as store from "./store.js";
 import { THEMES, getTheme, setTheme } from "./theme.js";
-import { latestReview, reviewBody } from "./review.js";
+import { latestReview, reviewBody, changesList } from "./review.js";
 
 async function showCode(promise, explainKey) {
   let out;
@@ -179,10 +179,13 @@ export function mountSettings(root) {
   theme.value = getTheme();
 
   // The last nightly check (public/app/review.js), on groceries only.
+  // "Wat hij deed": its own changes of the last 60 days, newest first.
   const review = h("div", {});
+  const changes = h("div", { class: "review-part" });
   const renderReview = (view) => {
     const r = latestReview(view);
     review.replaceChildren(...(r ? [h("p", { class: "mono mute" }, formatDate(r.day)), ...reviewBody(r).filter(Boolean)] : [h("p", { class: "hint" }, t("review.none"))]));
+    changes.replaceChildren(h("h3", { class: "low-label mono" }, t("review.changes")), changesList(view));
   };
 
   const otherApp = document.body.dataset.app === "recipes" ? t("app.groceries") : t("app.recipes");
@@ -214,7 +217,7 @@ export function mountSettings(root) {
         h("div", { class: "actions" }, h("button", { type: "button", class: "btn", onclick: shareRecipes }, t("settings.share_make")))) : null,
       !guest && document.body.dataset.app === "groceries" ? h("section", {},
         h("div", { class: "section-head" }, h("h2", {}, t("review.label"))),
-        h("div", { class: "review" }, review)) : null,
+        h("div", { class: "review" }, review, changes)) : null,
       h("section", {},
         h("div", { class: "section-head" }, h("h2", {}, t("settings.devices"))),
         devices,

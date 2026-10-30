@@ -26,8 +26,16 @@ Today is {{TODAY}}. You have the kitchen tools only. The data is Dutch.
    - kitchen_item_alias for a name that clearly means an existing item.
    Not sure? Do not fix it; put it under decide.
 5. A stray item (a name with "?" or a vague group) or two items for one thing:
-   never fix, put it under decide as a question.
-6. Use kitchen_product_ratings or kitchen_prices only when you need to look
+   never fix, put it under decide as a question. Duplicate items and
+   question-mark spellings are already handled before you by fixed rules
+   (see "Already done tonight"): do not ask about those again.
+6. Recipe lines without an item are listed under "Already done tonight". When
+   one clearly means an EXISTING item (a spelling, another word for the same
+   thing, an English word), give that item the line's name with
+   kitchen_item_alias and a short Dutch `reason` ("spelling", "Engels",
+   "ander woord"). Never for an item that does not exist yet; the rest stays
+   unlinked, the app shows why.
+7. Use kitchen_product_ratings or kitchen_prices only when you need to look
    something up. A shelf price that is clearly another product (other brand or
    pack) goes under decide.
 
@@ -59,6 +67,10 @@ Answer with one JSON object and nothing else:
 - decide: what the household should decide, as a question, e.g. "Saus?
   samenvoegen met Tomatensaus?"
 - Empty lists when there is nothing.
+
+## Already done tonight (by rule, before you)
+
+{{FIXES}}
 
 ## Run log (this morning's run only)
 

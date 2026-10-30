@@ -13,7 +13,9 @@ import { lookupShelf, shelfFill } from "./shelf.js";
 import { lookupKinds } from "./kinds.js";
 import { syncOffers } from "./offers.js";
 import { parseListInput } from "../public/shared/ingredients.js";
-import { isExcluded } from "../public/shared/excluded.js";
+import { isExcluded, isExcludedLookalike } from "../public/shared/excluded.js";
+import { mergeProblem, NIGHTLY_MERGE_MAX } from "../public/shared/dedupe.js";
+import { takeSome } from "./claude.js";
 import { widgetList, widgetNames } from "./widget.js";
 
 // [method, path, handler, options]. tools/map_check.py reads this table and
@@ -239,13 +241,56 @@ async function reviewerTouchesExcluded(env, who, list) {
   return results.some((p) => isExcluded(p.name ?? "") || isExcluded(`${p.brand ?? ""} ${p.name ?? ""}`));
 }
 
+/**
+ * The nightly check's merges and renames, checked against D1 before anything
+ * is applied: a merge only of two live items the CLEAR rules call one
+ * (mergeProblem, public/shared/dedupe.js: no excluded name, a clear pair, not
+ * two established items, no clashing rate or deal rule); a rename never of
+ * an excluded item. A from-item already merged away is a replay: the engine
+ * answers it. Returns the reason, or null.
+ */
+async function reviewerMergeRefused(env, who, list) {
+  for (const op of list) {
+    if (op.type === "item.rename") {
+      const item = await env.DB.prepare("SELECT name FROM items WHERE household_id = ? AND id = ?").bind(who.householdId, op.item_id).first();
+      if (item && (isExcluded(item.name) || isExcludedLookalike(item.name))) return "excluded";
+      continue;
+    }
+    if (op.type !== "item.merge") continue;
+    const facts = {};
+    for (const id of [op.from_item_id, op.into_item_id]) {
+      const item = await env.DB.prepare("SELECT id, name, use_per_day, rate_source, deleted_at FROM items WHERE household_id = ? AND id = ?")
+        .bind(who.householdId, id).first();
+      if (!item) return "not_found";
+      const count = async (table) => (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE household_id = ? AND item_id = ? AND deleted_at IS NULL`)
+        .bind(who.householdId, id).first())?.n ?? 0;
+      facts[id] = {
+        item, bought: await count("purchases"), rules: await count("deal_rules"),
+        rate: item.use_per_day !== null && (item.rate_source === "person" || item.rate_source === "learned"),
+      };
+    }
+    const from = facts[op.from_item_id], into = facts[op.into_item_id];
+    if (into.item.deleted_at) return "into_gone";
+    if (from.item.deleted_at) continue;
+    const why = mergeProblem(from, into);
+    if (why) return why;
+  }
+  return null;
+}
+
 async function ops({ env, who, body, ctx }) {
   const list = body?.ops;
   if (!Array.isArray(list) || list.length > MAX_OPS) return json({ error: "bad_ops" }, 400);
   // The whole request is refused before anything is applied.
   if (who.role === "importer" && !list.every(importerMayApply)) return json({ error: "forbidden" }, 403);
-  if (who.role === "reviewer" && (!list.every(reviewerMayApply) || await reviewerTouchesExcluded(env, who, list))) {
+  if (who.role === "reviewer" && (!list.every(reviewerMayApply) || await reviewerTouchesExcluded(env, who, list)
+    || await reviewerMergeRefused(env, who, list))) {
     return json({ error: "forbidden" }, 403);
+  }
+  // At most NIGHTLY_MERGE_MAX merges a day from the nightly check (usage_limits, bucket auto_merge:<household>:<day>).
+  const merges = who.role === "reviewer" ? list.filter((o) => o.type === "item.merge").length : 0;
+  if (merges && (await takeSome(env, "auto_merge", who.householdId, merges, NIGHTLY_MERGE_MAX)) < merges) {
+    return json({ error: "too_many_merges" }, 429);
   }
   if (who.recipesOnly && (!list.every(guestMayApply) || !(await guestOwnsAll(env, who, list)))) {
     return json({ error: "recipes_only" }, 403);

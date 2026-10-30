@@ -93,7 +93,10 @@ object Suggest {
                 val tr = tier(t, n) ?: continue
                 if (best == null || tr < best.first || (tr == best.first && best.second.alias && !n.alias)) best = tr to n
             }
-            if (best != null) out.add(Hit(c, best.first, if (best.second.alias) best.second.text else null))
+            if (best == null) continue
+            // A question-mark name only when typed exactly (suggest.js QUESTION).
+            if (best.first > 0 && (c.name.contains('?') || c.name.contains('¿') || best.second.text.contains('?') || best.second.text.contains('¿'))) continue
+            out.add(Hit(c, best.first, if (best.second.alias) best.second.text else null))
         }
         val collator = java.text.Collator.getInstance(Locale("nl")).apply { strength = java.text.Collator.PRIMARY }
         return out.sortedWith(compareBy<Hit> { it.tier }.thenByDescending { it.name.score }.thenComparator { a, b -> collator.compare(a.name.name, b.name.name) })

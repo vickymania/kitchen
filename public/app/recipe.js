@@ -4,6 +4,7 @@
 import { h, title, toast, sheet, newId, fill } from "./dom.js";
 import { t, formatAmount, formatNumber } from "./i18n.js";
 import { scaleIngredient, amountOf } from "../shared/ingredients.js";
+import { currentLinks, FROM_THE_TAP } from "../shared/recipe-links.js";
 import * as store from "./store.js";
 import { syncLine } from "./status.js";
 import { keepScreenOn } from "./wake.js";
@@ -99,16 +100,30 @@ export function scaled(recipe) {
   return recipe.ingredients.map((i) => (i.heading ? i : scaleIngredient(i, recipe.servings, n)));
 }
 
-function ingredientList(recipe) {
-  return h("ul", { class: "ings" }, scaled(recipe).map((i) => i.heading
-    ? h("li", { class: "head mono" }, i.name)
-    : h("li", { class: i.optional ? "opt" : null },
-      h("span", { class: "q" }, formatAmount(i)),
-      h("span", { class: "n" }, i.name, i.optional ? ` · ${t("recipe.optional")}` : "", i.note ? h("small", {}, i.note) : null))));
+/**
+ * A line the nightly check found no item for (public/shared/recipe-links.js):
+ * a small mark; a tap shows why. Only for the household, never for a
+ * recipes-only guest (`links` is null then).
+ */
+function unlinkedMark(link) {
+  const why = h("small", { class: "unlinked-why", hidden: true }, t("recipe.unlinked", { reason: t(`link.reason.${link.reason}`) }));
+  const mark = h("button", { type: "button", class: "unlinked mono", "aria-label": t("recipe.unlinked_aria"), "aria-expanded": "false",
+    onclick: () => { why.hidden = !why.hidden; mark.setAttribute("aria-expanded", String(!why.hidden)); } }, "?");
+  return [mark, why];
 }
 
-// Never bought, and never in the pantry: the tap stays out of the shopping list.
-const FROM_THE_TAP = new Set(["water", "kraanwater", "heet water", "kokend water", "kookwater", "lauw water", "ijskoud water"]);
+function ingredientList(recipe, links = null) {
+  let n = 0;
+  return h("ul", { class: "ings" }, scaled(recipe).map((i) => {
+    if (i.heading) return h("li", { class: "head mono" }, i.name);
+    const link = links?.[n++];
+    // Tap water needs no mark: it is never bought.
+    const mark = link && !link.item_id && link.reason && link.reason !== "tap" && link.name === i.name ? unlinkedMark(link) : [null, null];
+    return h("li", { class: i.optional ? "opt" : null },
+      h("span", { class: "q" }, formatAmount(i)),
+      h("span", { class: "n" }, i.name, mark[0], i.optional ? ` · ${t("recipe.optional")}` : "", i.note ? h("small", {}, i.note) : null, mark[1]));
+  }));
+}
 
 /**
  * "Product voor dit recept": a small button under an ingredient that opens the
@@ -244,7 +259,7 @@ export function mountRecipe(root, id) {
       h("div", { class: "wrap two" },
         h("div", {},
           h("div", { class: "section-head" }, h("h2", {}, t("recipe.ingredients"))),
-          ings ? ingredientList(r) : h("p", { class: "empty" }, t("recipe.no_ingredients"))),
+          ings ? ingredientList(r, guest ? null : currentLinks(r)) : h("p", { class: "empty" }, t("recipe.no_ingredients"))),
         h("div", {},
           h("div", { class: "section-head" }, h("h2", {}, t("recipe.method"))),
           r.steps.length ? h("ol", { class: "steps" }, r.steps.map((s) => h("li", {}, s))) : h("p", { class: "empty" }, t("recipe.no_steps")),

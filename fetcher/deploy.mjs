@@ -45,6 +45,11 @@ const FILES = [
   ["tools/import_lidl.mjs", "tools/import_lidl.mjs"],
   ["tools/lidl_items.mjs", "tools/lidl_items.mjs"],
   ["tools/import_todo.mjs", "tools/import_todo.mjs"],
+  // The nightly check's merges: the dedupe tool's rules and op ids, and the household's targets (private, optional).
+  ["tools/dedupe_items.mjs", "tools/dedupe_items.mjs"],
+  ["tools/dedupe-household.js", "tools/dedupe-household.js", "optional"],
+  ["public/shared/dedupe.js", "public/shared/dedupe.js"],
+  ["public/shared/recipe-links.js", "public/shared/recipe-links.js"],
   ["public/shared/offers.js", "public/shared/offers.js"],
   ["public/shared/excluded.js", "public/shared/excluded.js"],
   ["public/shared/excluded-words.js", "public/shared/excluded-words.js"],

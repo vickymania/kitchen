@@ -33,23 +33,34 @@ const IMPORTER_OPS = new Set(["receipt.save", "purchase.add", "product.put", "pr
 export const IMPORTER_ONLY_OPS = new Set(["prices.sync"]);
 
 /** Ops only the reviewer device may send: the nightly report is the home server's. */
-export const REVIEWER_ONLY_OPS = new Set(["review.save"]);
+export const REVIEWER_ONLY_OPS = new Set(["review.save", "recipe.links"]);
 
 // What the nightly check may change (30-10-2026): another name for an
 // item and one product moved to an item that exists, both undone in the app;
-// and its report. Never item.merge (cannot be undone), never a new item,
-// never removing a name, never anything else.
-const REVIEWER_OPS = new Set(["item.alias", "product.move", "review.save"]);
+// a merge of two items the CLEAR rules call one (public/shared/dedupe.js:
+// worker/api.js checks the pair, never an excluded item, at most
+// NIGHTLY_MERGE_MAX a day); a tidier spelling of an item's name (item.rename,
+// the same key only); which item each recipe line means (recipe.links); and its report. Never a new item, never removing a
+// name, never anything else. Every change lands in the changelog
+// (auto_changes, public/shared/ops.js logChange).
+const REVIEWER_OPS = new Set(["item.alias", "product.move", "item.merge", "item.rename", "review.save", "recipe.links"]);
 
 /**
  * May the reviewer device apply this op? item.alias only to add a name (no
  * `remove`); product.move only to an existing item by id (no `title`, which
- * could make a new one); review.save.
+ * could make a new one); item.merge only by ids (no `into_title`), with its
+ * day; item.rename only to a name without a question mark; review.save.
+ * worker/api.js then checks a merge's pair and the day's cap.
  */
 export function reviewerMayApply(op) {
   if (!op || typeof op !== "object" || !REVIEWER_OPS.has(op.type)) return false;
   if (op.type === "item.alias") return op.remove === undefined;
   if (op.type === "product.move") return op.title === undefined && typeof op.item_id === "string";
+  if (op.type === "item.merge") {
+    return op.into_title === undefined && typeof op.from_item_id === "string" && typeof op.into_item_id === "string" && typeof op.on === "string";
+  }
+  if (op.type === "item.rename") return typeof op.item_id === "string" && typeof op.name === "string" && !/[?¿]/.test(op.name);
+  if (op.type === "recipe.links") return typeof op.recipe_id === "string" && Array.isArray(op.lines);
   return true;
 }
 

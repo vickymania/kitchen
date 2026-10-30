@@ -643,15 +643,16 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       required: ["item"],
-      properties: { item: { type: "string" }, name: { type: "string" }, remove: { type: "boolean" } },
+      properties: { item: { type: "string" }, name: { type: "string" }, remove: { type: "boolean" }, reason: { type: "string", description: "Why, in a few Dutch words ('spelling', 'Engels'); shown in the nightly changelog." } },
     },
-    async run({ item, name, remove = false }) {
+    async run({ item, name, remove = false, reason = "" }) {
       const s = await state();
       const target = findItem({ items: Object.fromEntries(s.items), aliases: s.names.aliases }, nameKey(item));
       if (!target) throw new Error(`No item "${item}".`);
       const others = () => Object.values(s.names.aliases).filter((a) => a.item_id === target.id).map((a) => a.name).sort();
       if (!name) return others().length ? `${target.name} is also called: ${others().join(", ")}.` : `${target.name} has no other names.`;
-      const [r] = await send([{ type: "item.alias", id: newId(), item_id: target.id, name, ...(remove ? { remove: true } : {}) }]);
+      const [r] = await send([{ type: "item.alias", id: newId(), item_id: target.id, name, ...(remove ? { remove: true } : {}),
+        ...(!remove && typeof reason === "string" && reason.trim() ? { reason: reason.trim().slice(0, 60) } : {}) }]);
       if (r.result?.already) return remove ? `"${name}" was not a name of ${target.name}.` : `"${name}" already means ${target.name}.`;
       if (remove) return `"${name}" no longer means ${target.name}.`;
       const from = r.result?.taken_from ? s.items.get(r.result.taken_from)?.name ?? "another item" : null;

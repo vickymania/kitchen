@@ -331,6 +331,8 @@ test("migration: every old preferred product becomes a preference at its store, 
   applyMigration(env, "0023");
   applyMigration(env, "0024");     // store_prices is synced too
   applyMigration(env, "0025");     // reviews is synced too
+  applyMigration(env, "0026");
+  applyMigration(env, "0027");     // auto_changes is synced too
   const delta = await pull(env, thomas, head.rev);
   assert.ok(delta.rev > head.rev, "the household's rev moved, so phones ask");
   assert.deepEqual(delta.preferences.map((p) => [p.item_id, p.store, p.recipe_id, p.product_id]).sort(), [
@@ -414,11 +416,13 @@ test("fetcher files: every shared file the copied files import goes along", () =
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   // fetcher/deploy.mjs runs when imported (it deploys), so its list is read as text.
   const list = fs.readFileSync(path.join(root, "fetcher/deploy.mjs"), "utf8").match(/const FILES = \[([\s\S]*?)\n\];/)[1];
-  const copied = new Set([...list.matchAll(/\["([^"]+)", "[^"]+"\]/g)].map((m) => m[1]));
+  // A third field "optional" (a private file the public copy lacks) still counts as copied.
+  const copied = new Set([...list.matchAll(/\["([^"]+)", "[^"]+"(?:, "optional")?\]/g)].map((m) => m[1]));
   assert.ok(copied.has("public/shared/offers.js"));
   // The two entry points run.sh starts (the deals and the AH receipts).
   assert.ok(copied.has("fetcher/fetch.mjs") && copied.has("fetcher/ah_import.mjs"));
-  for (const from of [...copied].filter((f) => /\.m?js$/.test(f))) {
+  // An optional file (private, not in the public copy) is checked only where it exists.
+  for (const from of [...copied].filter((f) => /\.m?js$/.test(f) && fs.existsSync(path.join(root, f)))) {
     const src = fs.readFileSync(path.join(root, from), "utf8");
     // Static imports and relative dynamic ones (import_ah.mjs loads ah_pull.mjs so).
     for (const [, rel] of src.matchAll(/(?:from |import\()"(\.{1,2}\/[^"]+)"/g)) {

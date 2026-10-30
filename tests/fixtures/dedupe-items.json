@@ -1,0 +1,2069 @@
+{
+ "note": "Fictional items for tests/nightly-merge.test.mjs; expected = tools/dedupe_items.mjs planGroups before the grouping moved to public/shared/dedupe.js (59eb0d5).",
+ "options": {
+  "targets": [
+   "Kattenbrok"
+  ],
+  "excludes": [
+   "Most"
+  ]
+ },
+ "state": {
+  "items": {
+   "item-fx-001": {
+    "id": "item-fx-001",
+    "name": "Pastinaak",
+    "name_key": "pastinaak",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-002": {
+    "id": "item-fx-002",
+    "name": "Pastinaken",
+    "name_key": "pastinaken",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-003": {
+    "id": "item-fx-003",
+    "name": "x pastinaak",
+    "name_key": "x pastinaak",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-004": {
+    "id": "item-fx-004",
+    "name": "Pastinaak 500g",
+    "name_key": "pastinaak 500g",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-005": {
+    "id": "item-fx-005",
+    "name": "Maybe pastinaak",
+    "name_key": "maybe pastinaak",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-006": {
+    "id": "item-fx-006",
+    "name": "Pastinaakchips",
+    "name_key": "pastinaakchips",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-007": {
+    "id": "item-fx-007",
+    "name": "Pastinaak wraps",
+    "name_key": "pastinaak wraps",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-008": {
+    "id": "item-fx-008",
+    "name": "Pastinaakpuree",
+    "name_key": "pastinaakpuree",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-009": {
+    "id": "item-fx-009",
+    "name": "Pastinaak puree",
+    "name_key": "pastinaak puree",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-010": {
+    "id": "item-fx-010",
+    "name": "Gerookte kwark",
+    "name_key": "gerookte kwark",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-011": {
+    "id": "item-fx-011",
+    "name": "gerooktekwark",
+    "name_key": "gerooktekwark",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-012": {
+    "id": "item-fx-012",
+    "name": "belegen gerookte kwark",
+    "name_key": "belegen gerookte kwark",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-013": {
+    "id": "item-fx-013",
+    "name": "gerookte mozzarella",
+    "name_key": "gerookte mozzarella",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-014": {
+    "id": "item-fx-014",
+    "name": "Kikkererwt",
+    "name_key": "kikkererwt",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-015": {
+    "id": "item-fx-015",
+    "name": "Kikkererwten",
+    "name_key": "kikkererwten",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-016": {
+    "id": "item-fx-016",
+    "name": "Pruim",
+    "name_key": "pruim",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-017": {
+    "id": "item-fx-017",
+    "name": "Pruimen",
+    "name_key": "pruimen",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-018": {
+    "id": "item-fx-018",
+    "name": "Pruim 2",
+    "name_key": "pruim 2",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-019": {
+    "id": "item-fx-019",
+    "name": "Nootmuskaat",
+    "name_key": "nootmuskaat",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-020": {
+    "id": "item-fx-020",
+    "name": "Gemalen nootmuskaat",
+    "name_key": "gemalen nootmuskaat",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-021": {
+    "id": "item-fx-021",
+    "name": "Wraps",
+    "name_key": "wraps",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-022": {
+    "id": "item-fx-022",
+    "name": "Tortillas",
+    "name_key": "tortillas",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-023": {
+    "id": "item-fx-023",
+    "name": "Bloemtortilla",
+    "name_key": "bloemtortilla",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-024": {
+    "id": "item-fx-024",
+    "name": "Havervlokken",
+    "name_key": "havervlokken",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-025": {
+    "id": "item-fx-025",
+    "name": "Havervlokkne",
+    "name_key": "havervlokkne",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-026": {
+    "id": "item-fx-026",
+    "name": "Taart? Pruimen?",
+    "name_key": "taart pruimen",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-027": {
+    "id": "item-fx-027",
+    "name": "Kaneel",
+    "name_key": "kaneel",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-028": {
+    "id": "item-fx-028",
+    "name": "Kaneel of nootmuskaat",
+    "name_key": "kaneel of nootmuskaat",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-029": {
+    "id": "item-fx-029",
+    "name": "Spruitjes",
+    "name_key": "spruitjes",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-030": {
+    "id": "item-fx-030",
+    "name": "x spruitjes",
+    "name_key": "x spruitjes",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-031": {
+    "id": "item-fx-031",
+    "name": "Fruit",
+    "name_key": "fruit",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-032": {
+    "id": "item-fx-032",
+    "name": "Fruit 2",
+    "name_key": "fruit 2",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-033": {
+    "id": "item-fx-033",
+    "name": "Zeeppompje",
+    "name_key": "zeeppompje",
+    "deleted_at": null,
+    "use_per_day": 0.1,
+    "rate_source": "person"
+   },
+   "item-fx-034": {
+    "id": "item-fx-034",
+    "name": "Zeeppompjes",
+    "name_key": "zeeppompjes",
+    "deleted_at": null,
+    "use_per_day": 0.5,
+    "rate_source": "person"
+   },
+   "item-fx-035": {
+    "id": "item-fx-035",
+    "name": "Tandpasta",
+    "name_key": "tandpasta",
+    "deleted_at": null,
+    "use_per_day": 0.1,
+    "rate_source": "person"
+   },
+   "item-fx-036": {
+    "id": "item-fx-036",
+    "name": "Tandpasta 2",
+    "name_key": "tandpasta 2",
+    "deleted_at": null,
+    "use_per_day": 0.1,
+    "rate_source": "person"
+   },
+   "item-fx-037": {
+    "id": "item-fx-037",
+    "name": "Kattenbrok",
+    "name_key": "kattenbrok",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-038": {
+    "id": "item-fx-038",
+    "name": "Kattenbrokken",
+    "name_key": "kattenbrokken",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-039": {
+    "id": "item-fx-039",
+    "name": "x kattenbrok",
+    "name_key": "x kattenbrok",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-040": {
+    "id": "item-fx-040",
+    "name": "Most",
+    "name_key": "most",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-041": {
+    "id": "item-fx-041",
+    "name": "Mostje",
+    "name_key": "mostje",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-042": {
+    "id": "item-fx-042",
+    "name": "Mostjes",
+    "name_key": "mostjes",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-043": {
+    "id": "item-fx-043",
+    "name": "Ei",
+    "name_key": "ei",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-044": {
+    "id": "item-fx-044",
+    "name": "Eieren",
+    "name_key": "eieren",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-045": {
+    "id": "item-fx-045",
+    "name": "Rundergehakt",
+    "name_key": "rundergehakt",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-046": {
+    "id": "item-fx-046",
+    "name": "Gehakt",
+    "name_key": "gehakt",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-047": {
+    "id": "item-fx-047",
+    "name": "Gember",
+    "name_key": "gember",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-048": {
+    "id": "item-fx-048",
+    "name": "Gember gemalen",
+    "name_key": "gember gemalen",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-049": {
+    "id": "item-fx-049",
+    "name": "Rode ui",
+    "name_key": "rode ui",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-050": {
+    "id": "item-fx-050",
+    "name": "Rode uien",
+    "name_key": "rode uien",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-051": {
+    "id": "item-fx-051",
+    "name": "Rode ui, in ringen",
+    "name_key": "rode ui in ringen",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-052": {
+    "id": "item-fx-052",
+    "name": "Avocado",
+    "name_key": "avocado",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-053": {
+    "id": "item-fx-053",
+    "name": "Avocado's",
+    "name_key": "avocado s",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-054": {
+    "id": "item-fx-054",
+    "name": "Rijpe avocado",
+    "name_key": "rijpe avocado",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-055": {
+    "id": "item-fx-055",
+    "name": "Griekse kwark 10%",
+    "name_key": "griekse kwark 10",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-056": {
+    "id": "item-fx-056",
+    "name": "Griekse kwark",
+    "name_key": "griekse kwark",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-057": {
+    "id": "item-fx-057",
+    "name": "Afvalzakken 30L",
+    "name_key": "afvalzakken 30l",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-058": {
+    "id": "item-fx-058",
+    "name": "Afvalzakken 60L",
+    "name_key": "afvalzakken 60l",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-059": {
+    "id": "item-fx-059",
+    "name": "Komijn",
+    "name_key": "komijn",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-060": {
+    "id": "item-fx-060",
+    "name": "Gemalen komijn",
+    "name_key": "gemalen komijn",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-061": {
+    "id": "item-fx-061",
+    "name": "Cherrytomaten",
+    "name_key": "cherrytomaten",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-062": {
+    "id": "item-fx-062",
+    "name": "Cherry tomaten",
+    "name_key": "cherry tomaten",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-063": {
+    "id": "item-fx-063",
+    "name": "Tomatenpuree",
+    "name_key": "tomatenpuree",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   },
+   "item-fx-064": {
+    "id": "item-fx-064",
+    "name": "Tomatenpureesaus",
+    "name_key": "tomatenpureesaus",
+    "deleted_at": null,
+    "use_per_day": null,
+    "rate_source": null
+   }
+  },
+  "purchases": {
+   "purchase-fx-1-0": {
+    "id": "purchase-fx-1-0",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-1": {
+    "id": "purchase-fx-1-1",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-2": {
+    "id": "purchase-fx-1-2",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-3": {
+    "id": "purchase-fx-1-3",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-4": {
+    "id": "purchase-fx-1-4",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-5": {
+    "id": "purchase-fx-1-5",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-6": {
+    "id": "purchase-fx-1-6",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-7": {
+    "id": "purchase-fx-1-7",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-1-8": {
+    "id": "purchase-fx-1-8",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-2-0": {
+    "id": "purchase-fx-2-0",
+    "item_id": "item-fx-002",
+    "title": "Pastinaken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-3-0": {
+    "id": "purchase-fx-3-0",
+    "item_id": "item-fx-003",
+    "title": "x pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-4-0": {
+    "id": "purchase-fx-4-0",
+    "item_id": "item-fx-004",
+    "title": "Pastinaak 500g",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-5-0": {
+    "id": "purchase-fx-5-0",
+    "item_id": "item-fx-005",
+    "title": "Maybe pastinaak",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-6-0": {
+    "id": "purchase-fx-6-0",
+    "item_id": "item-fx-006",
+    "title": "Pastinaakchips",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-6-1": {
+    "id": "purchase-fx-6-1",
+    "item_id": "item-fx-006",
+    "title": "Pastinaakchips",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-7-0": {
+    "id": "purchase-fx-7-0",
+    "item_id": "item-fx-007",
+    "title": "Pastinaak wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-8-0": {
+    "id": "purchase-fx-8-0",
+    "item_id": "item-fx-008",
+    "title": "Pastinaakpuree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-8-1": {
+    "id": "purchase-fx-8-1",
+    "item_id": "item-fx-008",
+    "title": "Pastinaakpuree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-8-2": {
+    "id": "purchase-fx-8-2",
+    "item_id": "item-fx-008",
+    "title": "Pastinaakpuree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-9-0": {
+    "id": "purchase-fx-9-0",
+    "item_id": "item-fx-009",
+    "title": "Pastinaak puree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-10-0": {
+    "id": "purchase-fx-10-0",
+    "item_id": "item-fx-010",
+    "title": "Gerookte kwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-10-1": {
+    "id": "purchase-fx-10-1",
+    "item_id": "item-fx-010",
+    "title": "Gerookte kwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-11-0": {
+    "id": "purchase-fx-11-0",
+    "item_id": "item-fx-011",
+    "title": "gerooktekwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-12-0": {
+    "id": "purchase-fx-12-0",
+    "item_id": "item-fx-012",
+    "title": "belegen gerookte kwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-13-0": {
+    "id": "purchase-fx-13-0",
+    "item_id": "item-fx-013",
+    "title": "gerookte mozzarella",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-16-0": {
+    "id": "purchase-fx-16-0",
+    "item_id": "item-fx-016",
+    "title": "Pruim",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-16-1": {
+    "id": "purchase-fx-16-1",
+    "item_id": "item-fx-016",
+    "title": "Pruim",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-16-2": {
+    "id": "purchase-fx-16-2",
+    "item_id": "item-fx-016",
+    "title": "Pruim",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-16-3": {
+    "id": "purchase-fx-16-3",
+    "item_id": "item-fx-016",
+    "title": "Pruim",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-16-4": {
+    "id": "purchase-fx-16-4",
+    "item_id": "item-fx-016",
+    "title": "Pruim",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-17-0": {
+    "id": "purchase-fx-17-0",
+    "item_id": "item-fx-017",
+    "title": "Pruimen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-17-1": {
+    "id": "purchase-fx-17-1",
+    "item_id": "item-fx-017",
+    "title": "Pruimen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-17-2": {
+    "id": "purchase-fx-17-2",
+    "item_id": "item-fx-017",
+    "title": "Pruimen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-17-3": {
+    "id": "purchase-fx-17-3",
+    "item_id": "item-fx-017",
+    "title": "Pruimen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-17-4": {
+    "id": "purchase-fx-17-4",
+    "item_id": "item-fx-017",
+    "title": "Pruimen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-17-5": {
+    "id": "purchase-fx-17-5",
+    "item_id": "item-fx-017",
+    "title": "Pruimen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-18-0": {
+    "id": "purchase-fx-18-0",
+    "item_id": "item-fx-018",
+    "title": "Pruim 2",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-19-0": {
+    "id": "purchase-fx-19-0",
+    "item_id": "item-fx-019",
+    "title": "Nootmuskaat",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-19-1": {
+    "id": "purchase-fx-19-1",
+    "item_id": "item-fx-019",
+    "title": "Nootmuskaat",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-19-2": {
+    "id": "purchase-fx-19-2",
+    "item_id": "item-fx-019",
+    "title": "Nootmuskaat",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-20-0": {
+    "id": "purchase-fx-20-0",
+    "item_id": "item-fx-020",
+    "title": "Gemalen nootmuskaat",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-20-1": {
+    "id": "purchase-fx-20-1",
+    "item_id": "item-fx-020",
+    "title": "Gemalen nootmuskaat",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-0": {
+    "id": "purchase-fx-21-0",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-1": {
+    "id": "purchase-fx-21-1",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-2": {
+    "id": "purchase-fx-21-2",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-3": {
+    "id": "purchase-fx-21-3",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-4": {
+    "id": "purchase-fx-21-4",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-5": {
+    "id": "purchase-fx-21-5",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-6": {
+    "id": "purchase-fx-21-6",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-21-7": {
+    "id": "purchase-fx-21-7",
+    "item_id": "item-fx-021",
+    "title": "Wraps",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-22-0": {
+    "id": "purchase-fx-22-0",
+    "item_id": "item-fx-022",
+    "title": "Tortillas",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-23-0": {
+    "id": "purchase-fx-23-0",
+    "item_id": "item-fx-023",
+    "title": "Bloemtortilla",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-24-0": {
+    "id": "purchase-fx-24-0",
+    "item_id": "item-fx-024",
+    "title": "Havervlokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-24-1": {
+    "id": "purchase-fx-24-1",
+    "item_id": "item-fx-024",
+    "title": "Havervlokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-24-2": {
+    "id": "purchase-fx-24-2",
+    "item_id": "item-fx-024",
+    "title": "Havervlokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-24-3": {
+    "id": "purchase-fx-24-3",
+    "item_id": "item-fx-024",
+    "title": "Havervlokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-25-0": {
+    "id": "purchase-fx-25-0",
+    "item_id": "item-fx-025",
+    "title": "Havervlokkne",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-26-0": {
+    "id": "purchase-fx-26-0",
+    "item_id": "item-fx-026",
+    "title": "Taart? Pruimen?",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-27-0": {
+    "id": "purchase-fx-27-0",
+    "item_id": "item-fx-027",
+    "title": "Kaneel",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-27-1": {
+    "id": "purchase-fx-27-1",
+    "item_id": "item-fx-027",
+    "title": "Kaneel",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-28-0": {
+    "id": "purchase-fx-28-0",
+    "item_id": "item-fx-028",
+    "title": "Kaneel of nootmuskaat",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-29-0": {
+    "id": "purchase-fx-29-0",
+    "item_id": "item-fx-029",
+    "title": "Spruitjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-29-1": {
+    "id": "purchase-fx-29-1",
+    "item_id": "item-fx-029",
+    "title": "Spruitjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-29-2": {
+    "id": "purchase-fx-29-2",
+    "item_id": "item-fx-029",
+    "title": "Spruitjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-29-3": {
+    "id": "purchase-fx-29-3",
+    "item_id": "item-fx-029",
+    "title": "Spruitjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-30-0": {
+    "id": "purchase-fx-30-0",
+    "item_id": "item-fx-030",
+    "title": "x spruitjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-0": {
+    "id": "purchase-fx-31-0",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-1": {
+    "id": "purchase-fx-31-1",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-2": {
+    "id": "purchase-fx-31-2",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-3": {
+    "id": "purchase-fx-31-3",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-4": {
+    "id": "purchase-fx-31-4",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-5": {
+    "id": "purchase-fx-31-5",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-6": {
+    "id": "purchase-fx-31-6",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-7": {
+    "id": "purchase-fx-31-7",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-31-8": {
+    "id": "purchase-fx-31-8",
+    "item_id": "item-fx-031",
+    "title": "Fruit",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-32-0": {
+    "id": "purchase-fx-32-0",
+    "item_id": "item-fx-032",
+    "title": "Fruit 2",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-33-0": {
+    "id": "purchase-fx-33-0",
+    "item_id": "item-fx-033",
+    "title": "Zeeppompje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-33-1": {
+    "id": "purchase-fx-33-1",
+    "item_id": "item-fx-033",
+    "title": "Zeeppompje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-33-2": {
+    "id": "purchase-fx-33-2",
+    "item_id": "item-fx-033",
+    "title": "Zeeppompje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-33-3": {
+    "id": "purchase-fx-33-3",
+    "item_id": "item-fx-033",
+    "title": "Zeeppompje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-33-4": {
+    "id": "purchase-fx-33-4",
+    "item_id": "item-fx-033",
+    "title": "Zeeppompje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-33-5": {
+    "id": "purchase-fx-33-5",
+    "item_id": "item-fx-033",
+    "title": "Zeeppompje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-34-0": {
+    "id": "purchase-fx-34-0",
+    "item_id": "item-fx-034",
+    "title": "Zeeppompjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-35-0": {
+    "id": "purchase-fx-35-0",
+    "item_id": "item-fx-035",
+    "title": "Tandpasta",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-35-1": {
+    "id": "purchase-fx-35-1",
+    "item_id": "item-fx-035",
+    "title": "Tandpasta",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-35-2": {
+    "id": "purchase-fx-35-2",
+    "item_id": "item-fx-035",
+    "title": "Tandpasta",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-35-3": {
+    "id": "purchase-fx-35-3",
+    "item_id": "item-fx-035",
+    "title": "Tandpasta",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-35-4": {
+    "id": "purchase-fx-35-4",
+    "item_id": "item-fx-035",
+    "title": "Tandpasta",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-35-5": {
+    "id": "purchase-fx-35-5",
+    "item_id": "item-fx-035",
+    "title": "Tandpasta",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-36-0": {
+    "id": "purchase-fx-36-0",
+    "item_id": "item-fx-036",
+    "title": "Tandpasta 2",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-37-0": {
+    "id": "purchase-fx-37-0",
+    "item_id": "item-fx-037",
+    "title": "Kattenbrok",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-37-1": {
+    "id": "purchase-fx-37-1",
+    "item_id": "item-fx-037",
+    "title": "Kattenbrok",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-38-0": {
+    "id": "purchase-fx-38-0",
+    "item_id": "item-fx-038",
+    "title": "Kattenbrokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-38-1": {
+    "id": "purchase-fx-38-1",
+    "item_id": "item-fx-038",
+    "title": "Kattenbrokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-38-2": {
+    "id": "purchase-fx-38-2",
+    "item_id": "item-fx-038",
+    "title": "Kattenbrokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-38-3": {
+    "id": "purchase-fx-38-3",
+    "item_id": "item-fx-038",
+    "title": "Kattenbrokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-38-4": {
+    "id": "purchase-fx-38-4",
+    "item_id": "item-fx-038",
+    "title": "Kattenbrokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-38-5": {
+    "id": "purchase-fx-38-5",
+    "item_id": "item-fx-038",
+    "title": "Kattenbrokken",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-39-0": {
+    "id": "purchase-fx-39-0",
+    "item_id": "item-fx-039",
+    "title": "x kattenbrok",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-40-0": {
+    "id": "purchase-fx-40-0",
+    "item_id": "item-fx-040",
+    "title": "Most",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-40-1": {
+    "id": "purchase-fx-40-1",
+    "item_id": "item-fx-040",
+    "title": "Most",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-40-2": {
+    "id": "purchase-fx-40-2",
+    "item_id": "item-fx-040",
+    "title": "Most",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-40-3": {
+    "id": "purchase-fx-40-3",
+    "item_id": "item-fx-040",
+    "title": "Most",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-0": {
+    "id": "purchase-fx-41-0",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-1": {
+    "id": "purchase-fx-41-1",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-2": {
+    "id": "purchase-fx-41-2",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-3": {
+    "id": "purchase-fx-41-3",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-4": {
+    "id": "purchase-fx-41-4",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-5": {
+    "id": "purchase-fx-41-5",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-6": {
+    "id": "purchase-fx-41-6",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-7": {
+    "id": "purchase-fx-41-7",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-41-8": {
+    "id": "purchase-fx-41-8",
+    "item_id": "item-fx-041",
+    "title": "Mostje",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-42-0": {
+    "id": "purchase-fx-42-0",
+    "item_id": "item-fx-042",
+    "title": "Mostjes",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-0": {
+    "id": "purchase-fx-43-0",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-1": {
+    "id": "purchase-fx-43-1",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-2": {
+    "id": "purchase-fx-43-2",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-3": {
+    "id": "purchase-fx-43-3",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-4": {
+    "id": "purchase-fx-43-4",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-5": {
+    "id": "purchase-fx-43-5",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-43-6": {
+    "id": "purchase-fx-43-6",
+    "item_id": "item-fx-043",
+    "title": "Ei",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-44-0": {
+    "id": "purchase-fx-44-0",
+    "item_id": "item-fx-044",
+    "title": "Eieren",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-44-1": {
+    "id": "purchase-fx-44-1",
+    "item_id": "item-fx-044",
+    "title": "Eieren",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-45-0": {
+    "id": "purchase-fx-45-0",
+    "item_id": "item-fx-045",
+    "title": "Rundergehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-45-1": {
+    "id": "purchase-fx-45-1",
+    "item_id": "item-fx-045",
+    "title": "Rundergehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-45-2": {
+    "id": "purchase-fx-45-2",
+    "item_id": "item-fx-045",
+    "title": "Rundergehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-46-0": {
+    "id": "purchase-fx-46-0",
+    "item_id": "item-fx-046",
+    "title": "Gehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-46-1": {
+    "id": "purchase-fx-46-1",
+    "item_id": "item-fx-046",
+    "title": "Gehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-46-2": {
+    "id": "purchase-fx-46-2",
+    "item_id": "item-fx-046",
+    "title": "Gehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-46-3": {
+    "id": "purchase-fx-46-3",
+    "item_id": "item-fx-046",
+    "title": "Gehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-46-4": {
+    "id": "purchase-fx-46-4",
+    "item_id": "item-fx-046",
+    "title": "Gehakt",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-47-0": {
+    "id": "purchase-fx-47-0",
+    "item_id": "item-fx-047",
+    "title": "Gember",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-47-1": {
+    "id": "purchase-fx-47-1",
+    "item_id": "item-fx-047",
+    "title": "Gember",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-48-0": {
+    "id": "purchase-fx-48-0",
+    "item_id": "item-fx-048",
+    "title": "Gember gemalen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-49-0": {
+    "id": "purchase-fx-49-0",
+    "item_id": "item-fx-049",
+    "title": "Rode ui",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-49-1": {
+    "id": "purchase-fx-49-1",
+    "item_id": "item-fx-049",
+    "title": "Rode ui",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-49-2": {
+    "id": "purchase-fx-49-2",
+    "item_id": "item-fx-049",
+    "title": "Rode ui",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-50-0": {
+    "id": "purchase-fx-50-0",
+    "item_id": "item-fx-050",
+    "title": "Rode uien",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-51-0": {
+    "id": "purchase-fx-51-0",
+    "item_id": "item-fx-051",
+    "title": "Rode ui, in ringen",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-52-0": {
+    "id": "purchase-fx-52-0",
+    "item_id": "item-fx-052",
+    "title": "Avocado",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-52-1": {
+    "id": "purchase-fx-52-1",
+    "item_id": "item-fx-052",
+    "title": "Avocado",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-52-2": {
+    "id": "purchase-fx-52-2",
+    "item_id": "item-fx-052",
+    "title": "Avocado",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-52-3": {
+    "id": "purchase-fx-52-3",
+    "item_id": "item-fx-052",
+    "title": "Avocado",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-53-0": {
+    "id": "purchase-fx-53-0",
+    "item_id": "item-fx-053",
+    "title": "Avocado's",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-54-0": {
+    "id": "purchase-fx-54-0",
+    "item_id": "item-fx-054",
+    "title": "Rijpe avocado",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-55-0": {
+    "id": "purchase-fx-55-0",
+    "item_id": "item-fx-055",
+    "title": "Griekse kwark 10%",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-55-1": {
+    "id": "purchase-fx-55-1",
+    "item_id": "item-fx-055",
+    "title": "Griekse kwark 10%",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-56-0": {
+    "id": "purchase-fx-56-0",
+    "item_id": "item-fx-056",
+    "title": "Griekse kwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-56-1": {
+    "id": "purchase-fx-56-1",
+    "item_id": "item-fx-056",
+    "title": "Griekse kwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-56-2": {
+    "id": "purchase-fx-56-2",
+    "item_id": "item-fx-056",
+    "title": "Griekse kwark",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-57-0": {
+    "id": "purchase-fx-57-0",
+    "item_id": "item-fx-057",
+    "title": "Afvalzakken 30L",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-58-0": {
+    "id": "purchase-fx-58-0",
+    "item_id": "item-fx-058",
+    "title": "Afvalzakken 60L",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-59-0": {
+    "id": "purchase-fx-59-0",
+    "item_id": "item-fx-059",
+    "title": "Komijn",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-59-1": {
+    "id": "purchase-fx-59-1",
+    "item_id": "item-fx-059",
+    "title": "Komijn",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-60-0": {
+    "id": "purchase-fx-60-0",
+    "item_id": "item-fx-060",
+    "title": "Gemalen komijn",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-61-0": {
+    "id": "purchase-fx-61-0",
+    "item_id": "item-fx-061",
+    "title": "Cherrytomaten",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-61-1": {
+    "id": "purchase-fx-61-1",
+    "item_id": "item-fx-061",
+    "title": "Cherrytomaten",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-61-2": {
+    "id": "purchase-fx-61-2",
+    "item_id": "item-fx-061",
+    "title": "Cherrytomaten",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-61-3": {
+    "id": "purchase-fx-61-3",
+    "item_id": "item-fx-061",
+    "title": "Cherrytomaten",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-62-0": {
+    "id": "purchase-fx-62-0",
+    "item_id": "item-fx-062",
+    "title": "Cherry tomaten",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-63-0": {
+    "id": "purchase-fx-63-0",
+    "item_id": "item-fx-063",
+    "title": "Tomatenpuree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-63-1": {
+    "id": "purchase-fx-63-1",
+    "item_id": "item-fx-063",
+    "title": "Tomatenpuree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-63-2": {
+    "id": "purchase-fx-63-2",
+    "item_id": "item-fx-063",
+    "title": "Tomatenpuree",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   },
+   "purchase-fx-64-0": {
+    "id": "purchase-fx-64-0",
+    "item_id": "item-fx-064",
+    "title": "Tomatenpureesaus",
+    "bought_on": "2026-10-01",
+    "source": "history",
+    "deleted_at": null
+   }
+  },
+  "pantry": {
+   "pantry-fx-1": {
+    "id": "pantry-fx-1",
+    "item_id": "item-fx-001",
+    "title": "Pastinaak",
+    "amount": 1,
+    "taken": 0,
+    "pack_size": "",
+    "added_on": "2026-10-30",
+    "use_by": null,
+    "deleted_at": null
+   },
+   "pantry-fx-14": {
+    "id": "pantry-fx-14",
+    "item_id": "item-fx-014",
+    "title": "Kikkererwt",
+    "amount": 2,
+    "taken": 0,
+    "pack_size": "",
+    "added_on": "2026-10-30",
+    "use_by": null,
+    "deleted_at": null
+   }
+  },
+  "deal_rules": {
+   "rule-fx-33": {
+    "id": "rule-fx-33",
+    "item_id": "item-fx-033",
+    "product_id": null,
+    "offer_only": 1,
+    "deleted_at": null
+   },
+   "rule-fx-34": {
+    "id": "rule-fx-34",
+    "item_id": "item-fx-034",
+    "product_id": null,
+    "offer_only": 1,
+    "deleted_at": null
+   },
+   "rule-fx-37": {
+    "id": "rule-fx-37",
+    "item_id": "item-fx-037",
+    "product_id": null,
+    "offer_only": 1,
+    "deleted_at": null
+   }
+  }
+ },
+ "expected": {
+  "clear": [
+   [
+    "Pastinaak",
+    [
+     "Maybe pastinaak",
+     "Pastinaak 500g",
+     "Pastinaken",
+     "x pastinaak"
+    ]
+   ],
+   [
+    "Avocado",
+    [
+     "Avocado's",
+     "Rijpe avocado"
+    ]
+   ],
+   [
+    "Rode ui",
+    [
+     "Rode ui, in ringen",
+     "Rode uien"
+    ]
+   ],
+   [
+    "Gerookte kwark",
+    [
+     "belegen gerookte kwark",
+     "gerooktekwark"
+    ]
+   ],
+   [
+    "Kattenbrok",
+    [
+     "Kattenbrokken",
+     "x kattenbrok"
+    ]
+   ],
+   [
+    "Mostje",
+    [
+     "Mostjes"
+    ]
+   ],
+   [
+    "Ei",
+    [
+     "Eieren"
+    ]
+   ],
+   [
+    "Tandpasta",
+    [
+     "Tandpasta 2"
+    ]
+   ],
+   [
+    "Pruim",
+    [
+     "Pruim 2"
+    ]
+   ],
+   [
+    "Cherrytomaten",
+    [
+     "Cherry tomaten"
+    ]
+   ],
+   [
+    "Pastinaakpuree",
+    [
+     "Pastinaak puree"
+    ]
+   ],
+   [
+    "Tortillas",
+    [
+     "Bloemtortilla"
+    ]
+   ],
+   [
+    "Kikkererwt",
+    [
+     "Kikkererwten"
+    ]
+   ]
+  ],
+  "doubt": [
+   [
+    "Wraps",
+    [
+     [
+      "Tortillas",
+      [
+       "Bloemtortilla"
+      ]
+     ]
+    ],
+    [
+     [
+      "Tortillas",
+      "tortilla ~ wrap"
+     ]
+    ]
+   ],
+   [
+    "Pruimen",
+    [
+     [
+      "Pruim",
+      [
+       "Pruim 2"
+      ]
+     ]
+    ],
+    [
+     [
+      "Taart? Pruimen?",
+      "noemt meer dingen"
+     ],
+     [
+      "Pruim",
+      "enkelvoud/meervoud, beide vaak gekocht"
+     ]
+    ]
+   ],
+   [
+    "Zeeppompje",
+    [],
+    [
+     [
+      "Zeeppompjes",
+      "eigen verbruik botst, deal-regel botst"
+     ]
+    ]
+   ],
+   [
+    "Gehakt",
+    [],
+    [
+     [
+      "Rundergehakt",
+      "soort gehakt"
+     ]
+    ]
+   ],
+   [
+    "Havervlokken",
+    [],
+    [
+     [
+      "Havervlokkne",
+      "tikfout?"
+     ]
+    ]
+   ],
+   [
+    "Nootmuskaat",
+    [],
+    [
+     [
+      "Gemalen nootmuskaat",
+      "zonder \"gemalen\""
+     ]
+    ]
+   ],
+   [
+    "Gember",
+    [],
+    [
+     [
+      "Gember gemalen",
+      "zonder \"gemalen\""
+     ]
+    ]
+   ],
+   [
+    "Komijn",
+    [],
+    [
+     [
+      "Gemalen komijn",
+      "zonder \"gemalen\""
+     ]
+    ]
+   ]
+  ]
+ }
+}

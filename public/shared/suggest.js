@@ -17,12 +17,16 @@
 // Only tiers 0 and 1 may link by themselves (Enter): that is findItem in
 // public/shared/ops.js, which the server runs too. A fuzzy match is only ever
 // offered ("Bedoel je …?"), never applied. An excluded thing is suggested only when the
-// typed text names it exactly (tiers 0 and 1), never on its own.
+// typed text names it exactly (tiers 0 and 1), never on its own. A name with a
+// question mark ("Knoflookpoeder?", a stray line of the old lists) is offered
+// only when typed exactly (tier 0): Thomas, 30-10-2026.
 import { nameKey } from "./ingredients.js";
 import { isExcluded } from "./excluded.js";
 import { aliasTarget, findItem } from "./ops.js";
 
 export const SUGGEST_MAX = 6;
+/** A name with a question mark: never offered unless typed exactly. */
+export const QUESTION = /[?¿]/;
 // Half-life of a purchase in the ranking, in days.
 export const HALF_LIFE_DAYS = 180;
 
@@ -158,6 +162,8 @@ export function suggest(view, text, { limit = SUGGEST_MAX, today = new Date().to
     if (!best) continue;
     // Never an excluded thing on its own: only when the text names it exactly.
     if (best.tier > 1 && (isExcluded(c.item.name) || isExcluded(best.n.text))) continue;
+    // A question-mark name only when typed exactly.
+    if (best.tier > 0 && (QUESTION.test(c.item.name) || QUESTION.test(best.n.text))) continue;
     out.push({ item: c.item, tier: best.tier, via: best.n.alias ? best.n.text : null, score: c.score });
   }
   const collator = new Intl.Collator("nl", { sensitivity: "base", numeric: true });
