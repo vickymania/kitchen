@@ -302,7 +302,7 @@ const DAKGANGJEONG = [
   ["2 Tbsp water", null],
   ["1/2 Tbsp minced ginger", "Gember"],
   ["1/2 Tbsp minced garlic", "Knoflook"],
-  ["3 dried chilies ((optional))", "Chilivlokken"],
+  ["3 dried chilies ((optional))", null], // whole dried chilies are not a jar of flakes: 3 would empty it
   ["2 green onions ((optional), white part)", "Bosui"],
   ["2 tsp corn starch", "Maizena"],
   ["toasted sesame seeds", "Sesamzaad"],
@@ -347,7 +347,7 @@ test("an English recipe finds the Dutch household's items through the lexicon", 
     assert.equal(got, want, line);
     if (got) linked += 1;
   }
-  assert.equal(linked, 16);
+  assert.equal(linked, 15);
   // Exact and Dutch steps come first; the lexicon is the last step.
   assert.equal(resolveIngredient("zout", EN_HOUSE).how, "exact");
   assert.equal(resolveIngredient("soy sauce", EN_HOUSE).how, "english");
