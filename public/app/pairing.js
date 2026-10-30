@@ -27,13 +27,13 @@ export function deviceHint() {
   return undefined;     // the server reads the user agent, else "telefoon"
 }
 
-/** "Recepten delen": the one-time link #/join/<token> pairs this device as that person. */
+/** A one-time link ("Recepten delen", "Link delen"): the link #/join/<token> pairs this device as that person. */
 export async function consumeInvite(token) {
   try {
     await api.post("/api/pair", { invite: token, device: deviceHint() });
     return true;
   } catch (e) {
-    toast(e.code === "too_many_attempts" ? t("pair.too_many") : t("pair.invite_used"), { error: true });
+    toast(t({ too_many_attempts: "pair.too_many", recipes_only: "errors.recipes_only" }[e.code] ?? "pair.invite_used"), { error: true });
     return false;
   }
 }

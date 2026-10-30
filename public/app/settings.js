@@ -25,16 +25,18 @@ async function showCode(promise, explainKey) {
 }
 
 /**
- * "Recepten delen" (admins, on recipes): a name, then a one-time link for a
- * recipes-only person, to share or copy. The server makes it (/api/invites).
+ * A one-time link to share or copy, made by the server (/api/invites). `kind`
+ * says what it is: "guest" a recipes-only person (the name is asked first),
+ * "member" a new household member (the name is given), "device" another
+ * device of your own. The link opens on this app's host.
  */
-function shareRecipes() {
-  // One sheet: the name, and in its place the link once it is made.
+function shareLink({ ask, kind, name: given, admin, title: heading, onMade }) {
   return sheet((close) => {
     const body = h("div", {});
-    const who = h("input", { maxlength: "60", required: true, value: t("settings.share_default") });
+    const who = h("input", { maxlength: "60", required: true, value: given ?? "" });
     const make = h("button", { type: "submit", class: "btn primary" }, t("settings.share_make"));
     const showLink = (name, url) => {
+      onMade?.();
       const link = h("input", { class: "share-link", value: url, readonly: true, "aria-label": t("settings.share_link_title", { name }), onfocus: () => link.select() });
       const copy = async () => {
         try {
@@ -44,37 +46,46 @@ function shareRecipes() {
           link.select();
         }
       };
+      const text = t(kind === "guest" ? "settings.share_message" : "settings.share_message_app");
       body.replaceChildren(
         h("h2", {}, t("settings.share_link_title", { name })),
         link,
         h("p", { class: "hint" }, t("settings.share_link_expires")),
         h("div", { class: "actions" },
           navigator.share
-            ? h("button", { type: "button", class: "btn primary", onclick: () => navigator.share({ title: t("app.recipes"), text: t("settings.share_message"), url }).catch(() => {}) }, t("settings.share_share"))
+            ? h("button", { type: "button", class: "btn primary", onclick: () => navigator.share({ title: t(`app.${document.body.dataset.app}`), text, url }).catch(() => {}) }, t("settings.share_share"))
             : null,
           h("button", { type: "button", class: navigator.share ? "btn" : "btn primary", onclick: copy }, t("settings.share_copy")),
           h("button", { type: "button", class: "btn ghost", onclick: () => close() }, t("common.done"))));
     };
     const submit = async (e) => {
-      e.preventDefault();
-      const name = who.value.trim();
+      e?.preventDefault();
+      const name = ask ? who.value.trim() : given;
       if (!name) return;
       make.disabled = true;
       try {
-        showLink(name, (await api.post("/api/invites", { name })).url);
+        const payload = kind === "guest" ? { name } : kind === "member" ? { kind, name, admin: Boolean(admin) } : { kind };
+        showLink(name, (await api.post("/api/invites", payload)).url);
       } catch (err) {
         toast(isOffline(err) ? t("settings.needs_connection") : t("errors.refused"), { error: true });
         make.disabled = false;
       }
     };
+    if (!ask) {
+      submit();
+      return body;
+    }
     body.append(h("form", { onsubmit: submit },
-      h("h2", {}, t("settings.share_title")),
+      h("h2", {}, heading),
       h("label", { class: "field" }, h("span", { class: "mono" }, t("settings.share_name")), who),
       h("div", { class: "actions" }, make,
         h("button", { type: "button", class: "btn", onclick: () => close() }, t("common.cancel")))));
     return body;
   });
 }
+
+// "Recepten delen" (admins, on recipes): a recipes-only person.
+const shareRecipes = () => shareLink({ ask: true, kind: "guest", name: t("settings.share_default"), title: t("settings.share_title") });
 
 export function mountSettings(root) {
   const me = store.getMe();
@@ -113,11 +124,18 @@ export function mountSettings(root) {
       h("label", { class: "field" }, admin, " ", t("settings.make_admin")),
       h("p", { class: "hint" }, t("settings.admin_explain")),
       h("div", { class: "actions" }, h("button", { type: "submit", class: "btn primary" }, t("settings.make_code")),
-        h("button", { type: "button", class: "btn", onclick: () => close(false) }, t("common.cancel")))));
+        h("button", { type: "button", class: "btn", onclick: () => { if (who.reportValidity()) close("link"); } }, t("settings.share_link")),
+        h("button", { type: "button", class: "btn ghost", onclick: () => close(false) }, t("common.cancel")))));
     if (ok && who.value.trim()) {
-      await showCode(api.post("/api/codes", { for: "new_member", name: who.value.trim(), admin: admin.checked }), "settings.code_person");
+      if (ok === "link") {
+        await shareLink({ kind: "member", name: who.value.trim(), admin: admin.checked, onMade: loadInvites });
+      } else {
+        await showCode(api.post("/api/codes", { for: "new_member", name: who.value.trim(), admin: admin.checked }), "settings.code_person");
+      }
     }
   };
+
+  const linkDevice = () => shareLink({ kind: "device", name: me.member.name, onMade: loadInvites });
 
   const openOther = async () => {
     try {
@@ -127,6 +145,30 @@ export function mountSettings(root) {
       toast(isOffline(e) ? t("settings.needs_connection") : t("errors.refused"), { error: true });
     }
   };
+
+  // Links made and not used yet, to withdraw.
+  const invites = h("ul", { class: "kv" });
+  const invitesSection = h("section", { hidden: true },
+    h("div", { class: "section-head" }, h("h2", {}, t("settings.open_links"))), invites);
+  async function loadInvites() {
+    try {
+      const { invites: list } = await api.get("/api/invites");
+      invitesSection.hidden = !list.length;
+      invites.replaceChildren(...list.map((i) => h("li", {},
+        h("span", { class: "grow" }, t(`settings.open_${i.kind}`, { name: i.name }),
+          h("small", {}, t("settings.link_until", { date: formatDate(i.expires_at) }))),
+        h("button", {
+          type: "button", class: "btn ghost",
+          onclick: async () => {
+            if (!(await confirmSheet(t("settings.withdraw_confirm", { name: i.name }), t("settings.withdraw"), t("common.cancel")))) return;
+            await api.post("/api/invites/revoke", { id: i.id }).catch(() => toast(t("errors.refused"), { error: true }));
+            loadInvites();
+          },
+        }, t("settings.withdraw")))));
+    } catch {
+      invitesSection.hidden = true;
+    }
+  }
 
   async function loadDevices() {
     try {
@@ -206,7 +248,8 @@ export function mountSettings(root) {
         guest ? null : h("p", { class: "hint" }, t("settings.other_app_explain", { app: otherApp })),
         h("div", { class: "actions" },
           guest ? null : h("button", { type: "button", class: "btn primary", onclick: openOther }, t("settings.open_other", { app: otherApp })),
-          h("button", { type: "button", class: "btn", onclick: () => showCode(api.post("/api/codes", {}), "settings.code_device") }, t("settings.link_device")))),
+          h("button", { type: "button", class: "btn", onclick: () => showCode(api.post("/api/codes", {}), "settings.code_device") }, t("settings.link_device")),
+          guest ? null : h("button", { type: "button", class: "btn", onclick: linkDevice }, t("settings.share_link")))),
       guest ? null : h("section", {},
         h("div", { class: "section-head" }, h("h2", {}, t("settings.household"))),
         people,
@@ -215,6 +258,7 @@ export function mountSettings(root) {
         h("div", { class: "section-head" }, h("h2", {}, t("settings.share_title"))),
         h("p", { class: "hint" }, t("settings.share_explain")),
         h("div", { class: "actions" }, h("button", { type: "button", class: "btn", onclick: shareRecipes }, t("settings.share_make")))) : null,
+      invitesSection,
       !guest && document.body.dataset.app === "groceries" ? h("section", {},
         h("div", { class: "section-head" }, h("h2", {}, t("review.label"))),
         h("div", { class: "review" }, review, changes)) : null,
@@ -224,6 +268,7 @@ export function mountSettings(root) {
         h("div", { class: "actions" }, h("button", { type: "button", class: "btn ghost sig", onclick: signOut }, t("settings.sign_out"))))),
   );
   loadDevices();
+  if (!guest) loadInvites();
   return store.subscribe((view) => {
     renderPeople(view);
     renderReview(view);

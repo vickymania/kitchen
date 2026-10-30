@@ -234,7 +234,7 @@ async function recordFailure(env, ip) {
 
 /**
  * Pair this device with a code, a handoff token or an invite token.
- * `app` is the host's app: an invite pairs only on recipes. An invite's
+ * `app` is the host's app: a recipes-only invite pairs only on recipes. An invite's
  * device label is made here, "<name> - <device>", from `ua` and `device`.
  * Returns { token, memberId } or { error, status }.
  */
@@ -245,8 +245,8 @@ export async function pair(env, { code, handoff, invite, label, ip, app = "recip
   if (typeof code === "string" && /^\d{6}$/.test(code.trim())) hash = await hashCode(code.trim());
   else if (typeof handoff === "string" && /^[A-Za-z0-9_-]{20,100}$/.test(handoff)) hash = await hashHandoff(handoff);
   else if (typeof invite === "string" && /^[A-Za-z0-9_-]{20,100}$/.test(invite)) {
-    // Not even looked up on groceries: the link stays usable on recipes.
-    if (app !== "recipes") return { error: "recipes_only", status: 403 };
+    // A recipes-only link refuses groceries below, before the claim, so it
+    // stays usable on recipes; a full member's or device link works on both.
     hash = await hashInvite(invite);
   } else return { error: "bad_code", status: 400 };
 
@@ -328,27 +328,76 @@ export async function createHandoff(env, who) {
 }
 
 /**
- * "Recepten delen" (admins): a one-time link that makes a recipes-only
- * person, valid INVITE_DAYS. Only its hash is stored; the token travels in
- * the link's fragment (#/join/<token>), which no server log sees. A live
- * recipes-only person of the same name gets the new device instead of a
- * second person, so a new phone keeps his stars.
+ * A one-time link, valid INVITE_DAYS. Only its hash is stored; the token
+ * travels in the link's fragment (#/join/<token>), which no server log sees.
+ * Three kinds (30-10-2026), all pairing_codes rows of kind 'invite':
+ *  - "guest" ("Recepten delen", admins): a recipes-only person, recipes host
+ *    only. A live recipes-only person of the same name gets the new device
+ *    instead of a second person, so a new phone keeps his stars.
+ *  - "member" (admins): a new full member with the typed name, on either host.
+ *  - "device" (any member): another device of the asking member, either host.
+ * A person with a role, or a recipes-only person, makes no link.
  */
-export async function createInvite(env, who, { name } = {}) {
-  if (!who.isAdmin || who.recipesOnly || who.role) return { error: "forbidden", status: 403 };
+export async function createInvite(env, who, { name, kind = "guest", admin = false } = {}) {
+  if (who.recipesOnly || who.role || !["guest", "member", "device"].includes(kind)) return { error: "forbidden", status: 403 };
+  if (kind !== "device" && !who.isAdmin) return { error: "forbidden", status: 403 };
   const clean = typeof name === "string" ? name.trim().slice(0, 60) : "";
-  if (!clean) return { error: "name_required", status: 400 };
-  const existing = await env.DB.prepare(
-    `SELECT id, name FROM members WHERE household_id = ? AND recipes_only = 1 AND removed_at IS NULL
-        AND lower(name) = lower(?) ORDER BY created_at LIMIT 1`,
-  ).bind(who.householdId, clean).first();
+  if (kind !== "device" && !clean) return { error: "name_required", status: 400 };
+  let memberId = null;
+  let newName = clean;
+  if (kind === "device") {
+    memberId = who.memberId;
+    newName = who.name;
+  } else if (kind === "guest") {
+    const existing = await env.DB.prepare(
+      `SELECT id, name FROM members WHERE household_id = ? AND recipes_only = 1 AND removed_at IS NULL
+          AND lower(name) = lower(?) ORDER BY created_at LIMIT 1`,
+    ).bind(who.householdId, clean).first();
+    memberId = existing?.id ?? null;
+    newName = existing?.name ?? clean;
+  }
   const token = randomToken();
   const now = Date.now();
   const expires = new Date(now + INVITE_DAYS * 86400_000).toISOString();
   await env.DB.prepare(
     `INSERT INTO pairing_codes (code_hash, household_id, kind, member_id, new_member_name, make_admin, recipes_only, created_at, expires_at)
-     VALUES (?, ?, 'invite', ?, ?, 0, 1, ?, ?)`,
-  ).bind(await hashInvite(token), who.householdId, existing?.id ?? null, existing?.name ?? clean,
-    new Date(now).toISOString(), expires).run();
+     VALUES (?, ?, 'invite', ?, ?, ?, ?, ?, ?)`,
+  ).bind(await hashInvite(token), who.householdId, memberId, newName, kind === "member" && admin ? 1 : 0,
+    kind === "guest" ? 1 : 0, new Date(now).toISOString(), expires).run();
   return { token, expires_at: expires };
+}
+
+/**
+ * The links not yet used or expired: an admin sees all of the household, any
+ * other member only the links for his own devices. `id` is the start of the
+ * stored hash, no way to use the link.
+ */
+export async function listInvites(env, who) {
+  if (who.recipesOnly || who.role) return { error: "forbidden", status: 403 };
+  const { results } = await env.DB.prepare(
+    `SELECT code_hash, member_id, new_member_name, recipes_only, make_admin, created_at, expires_at FROM pairing_codes
+      WHERE household_id = ? AND kind = 'invite' AND used_at IS NULL AND expires_at > ?
+        AND (? = 1 OR member_id = ?) ORDER BY created_at`,
+  ).bind(who.householdId, new Date().toISOString(), who.isAdmin ? 1 : 0, who.memberId).all();
+  return {
+    invites: results.map((r) => ({
+      id: r.code_hash.slice(0, 16),
+      kind: r.recipes_only ? "guest" : r.member_id ? "device" : "member",
+      name: r.new_member_name,
+      created_at: r.created_at,
+      expires_at: r.expires_at,
+    })),
+  };
+}
+
+/** Withdraw an unused link: it expires now (the row stays, nothing is deleted). */
+export async function revokeInvite(env, who, id) {
+  if (who.recipesOnly || who.role || !/^[0-9a-f]{16}$/.test(String(id))) return { error: "not_found", status: 404 };
+  const now = new Date().toISOString();
+  const res = await env.DB.prepare(
+    `UPDATE pairing_codes SET expires_at = ? WHERE substr(code_hash, 1, 16) = ? AND household_id = ? AND kind = 'invite'
+        AND used_at IS NULL AND expires_at > ? AND (? = 1 OR member_id = ?)`,
+  ).bind(now, String(id), who.householdId, now, who.isAdmin ? 1 : 0, who.memberId).run();
+  if (!res.meta?.changes) return { error: "not_found", status: 404 };
+  return { ok: true };
 }

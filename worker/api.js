@@ -1,7 +1,7 @@
 // The /api routes. Every route except /api/pair needs a paired device; the
 // check happens here, once, before any handler runs.
 import {
-  authenticate, sameOrigin, pair, createCode, createHandoff, createInvite, sessionCookie, clearCookie, importerMayApply, IMPORTER_ONLY_OPS,
+  authenticate, sameOrigin, pair, createCode, createHandoff, createInvite, listInvites, revokeInvite, sessionCookie, clearCookie, importerMayApply, IMPORTER_ONLY_OPS,
   reviewerMayApply, REVIEWER_ONLY_OPS, guestMayApply, GUEST_OWN_OPS,
 } from "./auth.js";
 import { applyOps, pull } from "./ops-store.js";
@@ -32,6 +32,8 @@ const ROUTES = [
   ["GET", "/api/me", me, { guest: true }],
   ["POST", "/api/codes", codes, { guest: true }],
   ["POST", "/api/invites", invites],
+  ["GET", "/api/invites", inviteList],
+  ["POST", "/api/invites/revoke", inviteRevoke],
   ["POST", "/api/handoff", handoff],
   ["GET", "/api/devices", devices, { guest: true }],
   ["POST", "/api/devices/revoke", revokeDevice, { guest: true }],
@@ -150,12 +152,27 @@ async function codes({ env, who, body }) {
   return json(out);
 }
 
-// "Recepten delen": a one-time link that makes a recipes-only person.
+// A one-time link: {name} makes a recipes-only person (recipes host only);
+// {kind: "member", name} a new full member; {kind: "device"} another device of
+// the asker. See createInvite.
 async function invites({ env, url, who, body }) {
-  if (appOf(url) !== "recipes") return json({ error: "forbidden" }, 403);
-  const out = await createInvite(env, who, { name: body?.name });
+  const kind = body?.kind ?? "guest";
+  if (kind === "guest" && appOf(url) !== "recipes") return json({ error: "forbidden" }, 403);
+  const out = await createInvite(env, who, { name: body?.name, kind, admin: Boolean(body?.admin) });
   if (out.error) return json({ error: out.error }, out.status);
   return json({ url: `${url.origin}/#/join/${out.token}`, expires_at: out.expires_at });
+}
+
+async function inviteList({ env, who }) {
+  const out = await listInvites(env, who);
+  if (out.error) return json({ error: out.error }, out.status);
+  return json(out);
+}
+
+async function inviteRevoke({ env, who, body }) {
+  const out = await revokeInvite(env, who, body?.id);
+  if (out.error) return json({ error: out.error }, out.status);
+  return json(out);
 }
 
 async function handoff({ env, url, who }) {

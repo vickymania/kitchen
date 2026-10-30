@@ -110,7 +110,7 @@ async function start() {
   await setLocale(cached?.member.locale ?? guess);
 
   const handoff = location.hash.match(/^#pair=([\w-]+)$/)?.[1];
-  const invite = APP === "recipes" ? location.hash.match(/^#\/join\/([\w-]+)$/)?.[1] : null;
+  const invite = location.hash.match(/^#\/join\/([\w-]+)$/)?.[1] ?? null;
   if (handoff || invite) history.replaceState(null, "", location.pathname);
 
   const askMe = async () => {
