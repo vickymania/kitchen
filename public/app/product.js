@@ -540,7 +540,8 @@ export function mountProduct(root, productId) {
       p.store ? h("span", {}, p.store) : null,
       syncLine(status));
     fill(head, title(p.name, { long: p.name.length > 9 }));
-    // Other stores' shelf prices (Checkjebon), only when this very product was found there.
+    // Other stores' shelf prices (Checkjebon): this very product where a store sells it, else the
+    // comparable product compared with it ("≈ vergelijkbaar", public/shared/line-prices.js productPrices).
     const prices = pricesLine(view, p);
 
     fill(body,

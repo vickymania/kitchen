@@ -422,7 +422,7 @@
     "kept_apart": "Apart gehouden",
     "pick_two": "Kies er minstens twee."
   },
-  "prices": { "label": "Prijzen", "of": "prijzen van {day}" },
+  "prices": { "label": "Prijzen", "of": "prijzen van {day}", "comparable": "vergelijkbaar", "missing_here": {"one": "1 regel zonder prijs hier", "other": "{n} regels zonder prijs hier"}, "for_lines": "{n} van {total} regels" },
   "cooked": {
     "stats": "{n}× gekookt",
     "last": "laatst {date}"

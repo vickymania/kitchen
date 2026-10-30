@@ -27,6 +27,7 @@ import { learnRate, onOffer, earlierPurchases } from "./rate-learning.js";
 import { LINK_HOWS, LINK_REASONS } from "./recipe-links.js";
 import { LANGS, NAME_EN_SOURCES, NAME_EN_RANK, recipeLang, detectLang, cleanTranslation } from "./bilingual.js";
 import { PRICE_STORE_NAMES, MAX_PRICE_WRITES, checkPriceRows, matchStorePrices, storePriceId } from "./store-prices.js";
+import { comparableTargets, matchComparables, comparablePriceId } from "./comparable-prices.js";
 
 export class OpError extends Error {
   constructor(code, detail = "") {
@@ -1983,6 +1984,11 @@ const HANDLERS = {
   // row whose product has no match any more gets a tombstone. Data older
   // than what is stored changes nothing. The new and changed prices go
   // first, then the newer days, at most MAX_PRICE_WRITES rows per op.
+  // Prices v2 (30-10-2026): an item he buys or has on the list whose
+  // products this store does not sell gets its comparable product here
+  // (public/shared/comparable-prices.js): one row per item and store,
+  // "spc-<store>-<item>", comparable = 1, item_id set (private items stay
+  // hidden by it); gone when the store gets an exact price or no match.
   "prices.sync"(state, op, ctx) {
     const store = PRICE_STORE_NAMES.find((s) => s === canonicalStore(text(op.store, 40, "store")));
     if (!store) throw new OpError("bad_field", "store");
@@ -2002,15 +2008,30 @@ const HANDLERS = {
       const old = state.store_prices[rid];
       const same = old && !old.deleted_at && old.price_cents === m.cents && old.name === m.name && old.size === m.size;
       if (same && old.price_on === day) continue;
-      writes.push({ rank: same ? 1 : 0, on: same ? old.price_on : "", run: () => {
+      writes.push({ rank: same ? 2 : 0, on: same ? old.price_on : "", run: () => {
         const row = old ?? { id: rid, product_id: productId, store, created_at: ctx.now };
-        Object.assign(row, { name: m.name, size: m.size, price_cents: m.cents, price_on: day, updated_at: ctx.now, deleted_at: null });
+        Object.assign(row, { name: m.name, size: m.size, price_cents: m.cents, price_on: day, comparable: 0, updated_at: ctx.now, deleted_at: null });
+        state.store_prices[rid] = row;
+        ctx.touch("store_prices", rid);
+      } });
+    }
+    // Comparables, only for items without an exact price at this store.
+    const exactItems = new Set([...found.keys()].map((id) => state.products[id]?.item_id).filter(Boolean));
+    const comps = matchComparables(comparableTargets(state).filter((t) => !exactItems.has(t.item_id)), rows);
+    for (const [itemId, m] of comps) {
+      const rid = comparablePriceId(store, itemId);
+      const old = state.store_prices[rid];
+      const same = old && !old.deleted_at && old.price_cents === m.cents && old.name === m.name && old.size === m.size && old.product_id === m.product_id;
+      if (same && old.price_on === day) continue;
+      writes.push({ rank: same ? 3 : 1, on: same ? old.price_on : "", run: () => {
+        const row = old ?? { id: rid, item_id: itemId, store, created_at: ctx.now };
+        Object.assign(row, { item_id: itemId, product_id: m.product_id, name: m.name, size: m.size, price_cents: m.cents, price_on: day, comparable: 1, updated_at: ctx.now, deleted_at: null });
         state.store_prices[rid] = row;
         ctx.touch("store_prices", rid);
       } });
     }
     for (const r of stored) {
-      if (r.deleted_at || found.has(r.product_id)) continue;
+      if (r.deleted_at || (r.comparable ? comps.has(r.item_id) : found.has(r.product_id))) continue;
       writes.push({ rank: 0, on: "", run: () => {
         r.deleted_at = ctx.now;
         r.updated_at = ctx.now;
@@ -2019,7 +2040,7 @@ const HANDLERS = {
     }
     writes.sort((a, b) => a.rank - b.rank || a.on.localeCompare(b.on));
     for (const w of writes.slice(0, MAX_PRICE_WRITES)) w.run();
-    return { matched: found.size, written: Math.min(writes.length, MAX_PRICE_WRITES), left: Math.max(0, writes.length - MAX_PRICE_WRITES) };
+    return { matched: found.size, comparable: comps.size, written: Math.min(writes.length, MAX_PRICE_WRITES), left: Math.max(0, writes.length - MAX_PRICE_WRITES) };
   },
 
   // The nightly check's report (fetcher/review.mjs, sent by the home

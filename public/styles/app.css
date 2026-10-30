@@ -304,7 +304,10 @@ footer.foot{margin:72px 0 40px;color:var(--mute)}
 .shop>span{flex:0 0 auto;white-space:nowrap}
 .shop select{flex:1 1 auto;min-width:0;max-width:280px;min-height:40px;padding:7px 10px;font-size:15px}
 .shop select.set{border-color:var(--ink);box-shadow:inset 0 -3px 0 var(--signal);color:var(--ink)}
-.shop+.add{margin-top:12px}
+.shop+.add,.sum-wrap+.add{margin-top:12px}
+/* Prices v2: the store's total or the cheapest store, one quiet line under "Ik ben bij…". */
+.price-sum{margin:8px 0 0;font-size:12px;line-height:1.35;letter-spacing:0;color:var(--mute);overflow-wrap:anywhere}
+.price-sum b{font-weight:500;color:var(--ink)}
 /* The preference sheet: store and recipe, then the candidates with everyone's stars. */
 .scope{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
 @media(min-width:560px){.scope{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -504,6 +507,10 @@ div.field>span{display:block;color:var(--mute);margin-bottom:6px}
 .entry.line .line-main:hover{background:var(--panel)}
 .entry.line .line-main:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
 .entry.line .line-main>.short,.entry.line .line-main>.deal,.entry.line .line-main>.cheaper{grid-column:1/3}
+/* Prices v2: the price under the amount, at the right of an open line. */
+.entry.line .amt-col{display:flex;flex-direction:column;align-items:flex-end;gap:3px;align-self:start;padding-top:2px}
+.entry.line .line-price{font-size:12px;line-height:1.2;letter-spacing:.02em;color:var(--ink);white-space:nowrap}
+.entry.line .line-price .line-store,.entry.line .line-price.comparable{color:var(--mute)}
 .entry.line .short{font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
 .entry.line.checked .ttl{text-decoration:line-through;text-decoration-color:var(--signal);text-decoration-thickness:2px;color:var(--mute)}
 .entry.line.open .line-main{background:var(--panel)}
@@ -627,6 +634,7 @@ div.field>span{display:block;color:var(--mute);margin-bottom:6px}
 /* Other stores' shelf prices (public/app/prices.js): the cheapest in ink, the rest quiet. */
 .store-prices{font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
 .store-prices .cheapest{font-weight:500;color:var(--ink)}
+.store-prices .prices-note{white-space:nowrap}
 .recent-line .store-prices{grid-column:1/-1}
 .prices-hint{margin-top:22px}
 .prices-hint .store-prices{font-size:13px}

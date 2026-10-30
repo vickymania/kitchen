@@ -53,7 +53,7 @@ const COLUMNS = {
   cook_prompts: ["id", "recipe_id", "listed_on", "shopped_on", "entry_ids", "snoozed_on", "dismissed_at", "created_at", "updated_at", "deleted_at"],
   recipe_ratings: ["id", "member_id", "recipe_id", "stars", "asked_on", "created_at", "updated_at", "deleted_at"],
   aliases: ["id", "item_id", "name", "name_key", "created_by", "created_at", "updated_at", "deleted_at"],
-  store_prices: ["id", "product_id", "store", "name", "size", "price_cents", "price_on", "created_at", "updated_at", "deleted_at"],
+  store_prices: ["id", "product_id", "store", "name", "size", "price_cents", "price_on", "created_at", "updated_at", "deleted_at", "item_id", "comparable"],
   reviews: ["id", "day", "run_ok", "fixed", "decide", "errors", "turns", "cost_cents", "created_at", "updated_at", "deleted_at"],
   auto_changes: ["id", "day", "what", "name", "target", "item_id", "product_id", "reason", "lines", "created_at", "updated_at", "deleted_at", "undo", "undone_at"],
   decisions: ["id", "kind", "a", "b", "a_name", "b_name", "created_by", "created_at", "updated_at", "deleted_at"],
@@ -655,6 +655,10 @@ async function load(db, hh, op, memberId) {
       // their names, and this store's price rows, tombstones too (a returning price revives its row).
       await loadInto(db, hh, s, "products", "deleted_at IS NULL");
       await loadInto(db, hh, s, "items", "deleted_at IS NULL");
+      // For the comparables (public/shared/comparable-prices.js): the open
+      // list lines (their items) and the preferences (the product to compare with).
+      await loadInto(db, hh, s, "entries", "deleted_at IS NULL AND checked_at IS NULL");
+      await loadInto(db, hh, s, "preferences", "deleted_at IS NULL");
       await loadInto(db, hh, s, "store_prices", "store = ?", canonicalStore(String(op.store ?? "")));
       break;
     case "review.save":

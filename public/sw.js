@@ -59,6 +59,8 @@ const SHELL = [
   "/shared/cook-prompts.js",
   "/shared/recipe-ratings.js",
   "/shared/store-prices.js",
+  "/shared/comparable-prices.js",
+  "/shared/line-prices.js",
   "/shared/recent-purchases.js",
   "/shared/item-names.js",
   "/shared/item-find.js",

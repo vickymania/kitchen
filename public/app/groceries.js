@@ -21,8 +21,9 @@ import { cookPrompts } from "../shared/cook-prompts.js";
 import { markCooked } from "./recipe.js";
 import { dealRuleSheet, ruleLine } from "./deals.js";
 import { rulesOf, cheaperElsewhere, liveLineOffers, dealsFor } from "../shared/deals.js";
-import { isDealNote } from "../shared/store-prices.js";
-import { pricesLine } from "./prices.js";
+import { isDealNote, shortStore } from "../shared/store-prices.js";
+import { linePricesLine } from "./prices.js";
+import { listPrices, pickLinePrice, storeTotal, compareStores } from "../shared/line-prices.js";
 import { exactItem, didYouMean } from "../shared/suggest.js";
 import { compactKey } from "../shared/item-names.js";
 import { suggestBox, linkSheet, relink } from "./suggest-box.js";
@@ -138,6 +139,46 @@ function productLine(resolved, price) {
     why ? h("span", { class: "why" }, ` · ${why}`) : null);
 }
 
+/**
+ * The price on a line: "€2,19", "3× €1,19" (a count of packs), "≈€1,89" (a
+ * comparable product), and the store in front only when none is chosen and
+ * it is not where he usually buys it ("Dirk ≈€1,59"): a long name keeps its
+ * room at 375 px (seen 30-10-2026: "SCHNITTBROODJE/S" with "AH" in front).
+ */
+function linePrice(x, withStore) {
+  const text = `${x.comparable ? "≈" : ""}${x.qty > 1 ? `${x.qty}× ` : ""}${money(x.cents)}`;
+  const label = [x.store, x.qty > 1 ? `${x.qty} × ${money(x.cents)} = ${money(x.total)}` : money(x.cents), x.comparable ? `${t("prices.comparable")}: ${x.name}` : null]
+    .filter(Boolean).join(", ");
+  return h("span", { class: `line-price mono${x.comparable ? " comparable" : ""}`, title: label, "aria-label": label },
+    withStore ? h("span", { class: "line-store" }, `${shortStore(x.store)} `) : null, text);
+}
+
+/**
+ * Under "Ik ben bij…": that store's total of the list ("Dirk €38,40 · 2 regels
+ * zonder prijs hier"); without a store, where the list is cheapest ("AH €42 ·
+ * Dirk €39 · Jumbo €41 — voor 18 van 20 regels"). Nothing without prices.
+ */
+function priceSum(entries, prices, shop) {
+  if (!entries.length) return null;
+  if (shop) {
+    const sum = storeTotal(entries, prices, shop);
+    if (!sum.priced) return null;
+    return h("p", { class: "price-sum mono" }, h("b", {}, `${shortStore(sum.store)} ${money(sum.cents)}`),
+      sum.missing ? ` · ${t("prices.missing_here", { n: sum.missing })}` : null);
+  }
+  const cmp = compareStores(entries, prices);
+  if (!cmp) return null;
+  // Whole euros without the space: the row must fit one line at 375 px.
+  const euros = (c) => money(Math.round(c / 100) * 100).replace(/[.,]00(?=\D*$)/, "").replace(/€\s+/, "€");
+  const parts = [];
+  cmp.stores.forEach((x, i) => {
+    if (i) parts.push(" · ");
+    const text = `${shortStore(x.store)} ${euros(x.cents)}`;
+    parts.push(x.cheapest ? h("b", {}, text) : text);
+  });
+  return h("p", { class: "price-sum mono" }, ...parts, ` — ${t("prices.for_lines", { n: cmp.lines, total: cmp.of })}`);
+}
+
 /** "haal bij Lidl": the line's product is sold at one store only. */
 const onlyAtLine = (store) => h("span", { class: "only-at mono" }, t("list.only_at", { store }));
 
@@ -159,14 +200,13 @@ function shortLine(e, resolved) {
  * 28-10-2026): product and store with its last price, the offers, the
  * recipes, amount, note, the deal rules, and what the edit sheet offered.
  */
-function lineDetails(e, view, me, resolved, price, offers, cheaper) {
+function lineDetails(e, view, me, resolved, price, offers, cheaper, shelf) {
   const who = e.added_by && e.added_by !== me?.member.id ? view.members[e.added_by]?.name : null;
   const rules = e.item_id ? rulesOf(view, e.item_id) : [];
   const amount = formatAmounts(e.amounts);
-  // Other stores' shelf prices of the line's product (Checkjebon); with "Ik ben bij…" only that
-  // store's, also when his product there is the one he usually buys elsewhere (no preference for that store).
-  const priced = resolved?.product ?? (e.item_id ? resolveProduct(view, e, null)?.product : null);
-  const prices = priced && !e.checked_at ? pricesLine(view, priced, { store: getStore() }) : null;
+  // The line's shelf prices per store (Checkjebon; public/shared/line-prices.js): his product's,
+  // else the comparable one ("≈ vergelijkbaar"); with "Ik ben bij…" only that store's.
+  const prices = !e.checked_at && shelf?.length ? linePricesLine(view, e, { store: getStore(), list: shelf }) : null;
   const row = (label, ...value) => h("div", { class: "kv-row" }, h("dt", { class: "mono" }, label), h("dd", {}, ...value));
   const act = (label, onclick, cls = "btn mono") => h("button", { type: "button", class: cls, onclick }, label);
   return h("div", { class: "line-details" },
@@ -245,6 +285,9 @@ function entryRow({ entry: e, resolved }, ctx) {
   const price = resolved ? lastPrice(resolved.product, resolved.onlyAt ?? shop, byProduct) : null;
   const { mine, named } = checked ? { mine: [], named: [] } : liveLineOffers(e, resolved?.product, deals, ctx.hits, shop);
   const cheaper = checked ? null : cheaperElsewhere(view, e, deals, shop, byProduct);
+  // Prices v2: the price ON the line, at the right under the amount (public/shared/line-prices.js).
+  const shelf = ctx.prices?.get(e.id) ?? [];
+  const onLine = checked ? null : pickLinePrice(view, e, shelf, { store: shop, byProduct });
   const toggleOpen = () => {
     if (expanded.has(e.id)) expanded.delete(e.id); else expanded.add(e.id);
     ctx.rerender();
@@ -269,7 +312,7 @@ function entryRow({ entry: e, resolved }, ctx) {
     }, h("span", { class: "box" }, svg(CHECK_SVG))),
     h("button", { type: "button", class: "line-main", "aria-expanded": String(isOpen), onclick: toggleOpen },
       h("span", { class: "ttl" }, name, privateMark(view, e.item_id), fresh ? h("span", { class: "new-tag mono" }, t("names.new")) : null),
-      h("span", { class: "amt" }, formatAmounts(e.amounts)),
+      h("span", { class: "amt-col" }, h("span", { class: "amt" }, formatAmounts(e.amounts)), onLine ? linePrice(onLine, !shop && !onLine.home) : null),
       typed && typed !== name ? h("span", { class: "typed mono" }, t("names.typed", { text: typed })) : null,
       shortLine(e, resolved),
       !isOpen && mine.length ? dealLine(mine, { mine: true }) : null,
@@ -279,7 +322,7 @@ function entryRow({ entry: e, resolved }, ctx) {
     checked ? null : h("button", { type: "button", class: "del", "aria-label": t("remove.aria", { title: name }), onclick: () => removeEntry(e) }, "×"),
     meant ? h("button", { type: "button", class: "meant mono", onclick: () => relink(e, meant.item) },
       t("names.did_you_mean", { name: shownName(view, meant.item.name) })) : null,
-    isOpen ? lineDetails(e, view, me, resolved, price, offers, cheaper) : null);
+    isOpen ? lineDetails(e, view, me, resolved, price, offers, cheaper, shelf) : null);
 }
 
 /**
@@ -305,6 +348,8 @@ export function mountGroceries(root, focusId = null) {
   // "Bijna op": only there when something runs out that is not on the list yet.
   const low = h("div", {});
   const cart = h("div", {});
+  // Prices v2: the store's total, or which store is cheapest, under "Ik ben bij…".
+  const sum = h("div", { class: "sum-wrap" });
   // "Al nodig?" under the open lines: a hint, not part of the list.
   const soon = h("div", {});
   // "Ik ben bij...": this phone's store for this trip (public/app/shop.js).
@@ -351,6 +396,7 @@ export function mountGroceries(root, focusId = null) {
       useUp,
       low,
       h("label", { class: "shop mono" }, h("span", {}, t("shop.label")), shopPick),
+      sum,
       h("form", { class: "add", onsubmit: add }, input, h("button", { type: "submit", class: "btn primary", "aria-label": t("list.add") }, "+")),
       box.list,
       cart, open, soon),
@@ -396,7 +442,10 @@ export function mountGroceries(root, focusId = null) {
     for (const id of expanded) if (!view.entries[id]) expanded.delete(id);
     // What the Deals tab finds for an item shows on its line too, live (liveLineOffers).
     const hits = dealsFor(view, localToday());
-    const ctx = { view, me, deals, shop, byProduct, hits, expanded, rerender: () => render(store.getView(), store.getStatus()) };
+    // Every line's shelf prices once per render (public/shared/line-prices.js).
+    const prices = listPrices(view, all, localToday());
+    fill(sum, priceSum(all.filter((e) => !e.deleted_at), prices, shop));
+    const ctx = { view, me, deals, shop, byProduct, hits, expanded, prices, rerender: () => render(store.getView(), store.getStatus()) };
     const basket = layout.find((s) => s.kind === "basket");
     const groups = layout.filter((s) => s.kind === "store");
 

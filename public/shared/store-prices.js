@@ -41,7 +41,7 @@ export const PRICE_MAX_AGE_DAYS = 14;
 /** A price older than this shows its date. */
 export const PRICE_OLD_DAYS = 2;
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** "Crispy's" and "Crispys" are one word; "Dr. Oetker" is "dr oetker". */
 export const keyWords = (text) => nameKey(String(text ?? "").replace(/['’`´]/g, "")).split(" ").filter(Boolean);
@@ -110,26 +110,26 @@ export function samePack(a, b) {
 // ------------------------------------------------------------ matching
 
 // Words that say nothing about which product it is: sizes, packs, filler.
-const FILLER = new Set(["en", "met", "van", "de", "het", "in", "of", "voor", "per", "x", "ca", "stuks", "stuk", "st", "stk",
+export const FILLER = new Set(["en", "met", "van", "de", "het", "in", "of", "voor", "per", "x", "ca", "stuks", "stuk", "st", "stk",
   "gram", "gr", "g", "kg", "kilo", "ml", "cl", "l", "liter", "ltr", "zak", "zakje", "zakjes", "pak", "pakje", "doos", "tray",
   "fles", "blik", "pot", "beker", "bak", "bakje", "set"]);
 // A product's default kind: "Crispy's Hamka's original" is Dirk's "Crispy's Hamka's".
-const DEFAULT_WORDS = new Set(["original", "originals", "origineel", "naturel", "classic", "klassiek", "regular"]);
-const noise = (w) => FILLER.has(w) || /\d/.test(w) || isStoreName(w);
+export const DEFAULT_WORDS = new Set(["original", "originals", "origineel", "naturel", "classic", "klassiek", "regular"]);
+export const noise = (w) => FILLER.has(w) || /\d/.test(w) || isStoreName(w);
 
 /**
  * One word for another: a plural ("american"/"americans", one the start of
  * the other plus at most two letters) or a stem of five letters or more
  * ("houdbaar"/"houdbare"). Never two short words a letter apart ("dinga"/"dingb").
  */
-function sameWord(a, b) {
+export function sameWord(a, b) {
   if (a === b) return true;
   let i = 0;
   while (i < a.length && i < b.length && a[i] === b[i]) i++;
   if (i >= 4 && i === Math.min(a.length, b.length)) return Math.abs(a.length - b.length) <= 2;
   return i >= 5 && i >= Math.max(a.length, b.length) - 2;
 }
-const holds = (o, w) => sameWord(o, w) || (w.length >= 5 && (o.startsWith(w) || o.endsWith(w)));
+export const holds = (o, w) => sameWord(o, w) || (w.length >= 5 && (o.startsWith(w) || o.endsWith(w)));
 
 /** The store a product belongs to, or "" when its brand is sold everywhere. */
 function ownStore(p) {
@@ -240,18 +240,19 @@ export const storePriceId = (store, productId) => `sp-${nameKey(canonicalStore(s
 
 // ------------------------------------------------------------- showing
 
-const ageDays = (day, today) => Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${day}T12:00:00Z`)) / 86_400_000);
+export const ageDays = (day, today) => Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${day}T12:00:00Z`)) / 86_400_000);
 
 /**
  * The shelf prices of one product, cheapest first: [{ store, cents, name,
  * size, on, cheapest }]. With `store` ("Ik ben bij…") only that store's.
  * Never older than PRICE_MAX_AGE_DAYS, never an excluded thing. `cheapest` marks the
- * lowest price when another store asks more.
+ * lowest price when another store asks more. Only exact rows: a comparable
+ * product (public/shared/comparable-prices.js) is another product.
  */
 export function pricesOf(storePrices, product, today, { store = null } = {}) {
   if (!product || product.deleted_at || isExcluded(`${product.brand ?? ""} ${product.name ?? ""}`)) return [];
   const list = Object.values(storePrices ?? {})
-    .filter((r) => r && !r.deleted_at && r.product_id === product.id && DAY.test(r.price_on ?? "")
+    .filter((r) => r && !r.deleted_at && !r.comparable && r.product_id === product.id && DAY.test(r.price_on ?? "")
       && ageDays(r.price_on, today) <= PRICE_MAX_AGE_DAYS && (!store || sameStore(r.store, store)))
     .map((r) => ({ store: canonicalStore(r.store), cents: r.price_cents, name: r.name, size: r.size, on: r.price_on, cheapest: false }))
     .sort((a, b) => a.cents - b.cents || a.store.localeCompare(b.store));

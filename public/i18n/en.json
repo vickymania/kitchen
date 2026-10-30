@@ -422,7 +422,7 @@
     "kept_apart": "Kept apart",
     "pick_two": "Pick at least two."
   },
-  "prices": { "label": "Prices", "of": "prices of {day}" },
+  "prices": { "label": "Prices", "of": "prices of {day}", "comparable": "comparable", "missing_here": {"one": "1 line without a price here", "other": "{n} lines without a price here"}, "for_lines": "{n} of {total} lines" },
   "cooked": {
     "stats": "Cooked {n}×",
     "last": "last {date}"

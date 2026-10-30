@@ -152,7 +152,7 @@ test("op prices.sync: keeps only his products, writes only what changed, tombsto
   const s = priceState();
   const op = (day, rows) => ({ type: "prices.sync", store: "dirk", day, rows });
   const first = applyOp(s, op(DAY, ROWS.dirk), ctx);
-  assert.deepEqual(first.result, { matched: 1, written: 1, left: 0 });
+  assert.deepEqual(first.result, { matched: 1, comparable: 0, written: 1, left: 0 });
   const id = storePriceId("Dirk", HAMKAS.id);
   assert.equal(Object.keys(s.store_prices).length, 1, "one row, not the store's whole list");
   assert.deepEqual([s.store_prices[id].store, s.store_prices[id].price_cents, s.store_prices[id].price_on], ["Dirk", 149, DAY]);
@@ -181,7 +181,7 @@ test("op prices.sync: at most MAX_PRICE_WRITES rows, new prices before refreshed
     rows.push([`Merk ${word(i)}`, "100 g", 100 + i, ""]);
   }
   const first = applyOp(s, { type: "prices.sync", store: "Dirk", day: DAY, rows }, ctx);
-  assert.deepEqual(first.result, { matched: n, written: MAX_PRICE_WRITES, left: 5 });
+  assert.deepEqual(first.result, { matched: n, comparable: 0, written: MAX_PRICE_WRITES, left: 5 });
   const next = applyOp(s, { type: "prices.sync", store: "Dirk", day: "2026-10-30", rows }, ctx);
   assert.equal(next.result.written, MAX_PRICE_WRITES);
   const newOnes = Array.from({ length: n }, (_, i) => s.store_prices[storePriceId("Dirk", `p-${i}`)]).filter(Boolean);
