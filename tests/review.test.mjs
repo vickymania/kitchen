@@ -23,7 +23,7 @@ import { GUEST_SYNCED } from "../worker/ops-store.js";
 import { localToday } from "../public/shared/intervals.js";
 import { newPurchasesText, NEW_PURCHASES_FILE } from "../tools/import_ah.mjs";
 import {
-  prepare, save, readReport, logTail, logErrors, buildPrompt, mcpConfig, reportText, reviewOp, failureLines, LOG_LINES,
+  prepare, save, readReport, logTail, lastRunLog, amsterdamDay, logErrors, buildPrompt, mcpConfig, reportText, reviewOp, failureLines, LOG_LINES,
 } from "../fetcher/review.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -181,7 +181,8 @@ test("prepare: the log tail and today's new purchases go into the prompt, once a
   const home = tmp("home");
   fs.mkdirSync(path.join(home, "fetcher"));
   fs.copyFileSync(path.join(ROOT, "fetcher/review-prompt.md"), path.join(home, "fetcher/review-prompt.md"));
-  const lines = Array.from({ length: LOG_LINES + 30 }, (_, i) => `2026-10-30T05:17:${String(i % 60).padStart(2, "0")}Z line ${i}`);
+  const lines = ["2026-10-29T05:15:00Z lidl FAILED yesterday's error", "2026-10-30T05:15:00Z run start"];
+  lines.push(...Array.from({ length: LOG_LINES + 30 }, (_, i) => `2026-10-30T05:17:${String(i % 60).padStart(2, "0")}Z line ${i}`));
   lines.push("2026-10-30T05:20:00Z lidl FAILED Lidl refresh refused", "2026-10-30T07:20:01+01:00 lidl exit 1");
   fs.writeFileSync(path.join(home, "fetcher.log"), lines.join("\n"));
   fs.mkdirSync(path.join(home, "ah-state"));
@@ -372,10 +373,11 @@ test("MCP with the reviewer's token file: recent purchases, a product moved (nev
     assert.equal(seeded.status, 200);
     await excludedRow(live.env);
 
-    const recent = await client.tool("kitchen_recent_purchases", { days: 2, all_items: true });
+    const recent = await client.tool("kitchen_recent_purchases", { days: 2 });
     assert.equal(recent.error, false, recent.text);
     assert.match(recent.text, /AH Tonijn in water, 3 x 56 g \[product: ah-product-tonijn-water\] → item Tonijn/);
-    assert.match(recent.text, /All items \(purchases\): .*Minoestuna \(1\)/);
+    assert.match(recent.text, /candidate items: .*Minoestuna \[item: /, "the cat's tuna is offered as a candidate for the tuna in water");
+    assert.ok(!/All items/.test(recent.text), "no list of every item any more");
     assert.ok(!/Groene Ster|Spruitjes/i.test(recent.text), "an excluded thing is never listed");
 
     const dry = await client.tool("kitchen_product_move", { product_id: "ah-product-tonijn-water", item: "minoestuna", dry_run: true });
@@ -420,4 +422,64 @@ test("review.sh: off by default, last in run.sh, Claude locked to the kitchen to
   const deploy = fs.readFileSync(path.join(ROOT, "fetcher/deploy.mjs"), "utf8");
   for (const f of ["fetcher/review.mjs", "fetcher/review.sh", "fetcher/review-prompt.md", "mcp/server.mjs"]) assert.ok(deploy.includes(`["${f}", "${f}"]`), `${f} is deployed`);
   assert.ok(deploy.includes('"reviewer-token"'), "its token file is kept at mode 600");
+});
+
+test("lastRunLog: only the lines of the latest run; an older run or no marker says so instead of passing old errors", () => {
+  const old = ["2026-10-29T06:17:00+01:00 run start", "2026-10-29T06:18:00+01:00 lidl FAILED token", "2026-10-29T06:18:01+01:00 lidl exit 1"];
+  const mine = ["2026-10-30T06:17:00+01:00 run start", "2026-10-30T06:18:01+01:00 lidl exit 0"];
+  const both = lastRunLog([...old, ...mine].join("\n"), "2026-10-30");
+  assert.equal(both, mine.join("\n"), "the earlier run is gone");
+  assert.ok(!both.includes("FAILED"));
+  // A manual check before today's run: the tail is yesterday's run.
+  const stale = lastRunLog(old.join("\n"), "2026-10-30");
+  assert.match(stale, /no run today yet/);
+  assert.ok(!stale.includes("FAILED") && !stale.includes("exit 1"), "old errors are not passed on");
+  assert.match(lastRunLog("lidl FAILED token\nlidl exit 1", "2026-10-30"), /no run today yet/);
+  assert.match(lastRunLog("", "2026-10-30"), /no run today yet/);
+  // The household's day is Amsterdam's: 23:30 UTC on the 29th is already the 30th there.
+  assert.equal(amsterdamDay("2026-10-29T23:30:00Z"), "2026-10-30");
+  assert.match(lastRunLog("2026-10-29T23:30:00Z run start\n2026-10-29T23:31:00Z ah exit 0", "2026-10-30"), /ah exit 0/);
+  // run.sh writes the marker the check looks for.
+  const sh = fs.readFileSync(path.join(ROOT, "fetcher", "run.sh"), "utf8");
+  assert.match(sh, /echo "\$\(date -Is\) run start" >> "\$LOG"/);
+  assert.ok(sh.indexOf("run start") < sh.indexOf("fetch.mjs"), "the marker comes first");
+  // The prompt is told what to do with it.
+  assert.match(buildPrompt({ template: "{{LOG}}", today: "x", log: stale, purchases: "" }), /no run today yet/);
+});
+
+test("kitchen_recent_purchases: 1500 items stay under the cap, still with the right candidate; no all_items", async () => {
+  const live = await liveWorker();
+  const dir = tmp("big");
+  const tokenFile = path.join(dir, "reviewer-token");
+  fs.writeFileSync(tokenFile, `${live.reviewer}
+`);
+  const client = mcp({ KITCHEN_ORIGIN: live.origin, KITCHEN_TOKEN_FILE: tokenFile });
+  try {
+    const send = async (ops) => assert.equal((await fetch(`${live.origin}/api/ops`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${live.thomas}` }, body: JSON.stringify({ ops }),
+    })).status, 200);
+    await send([
+      purchase("pur-big-tonijn", "Tonijn", { id: "ah-product-tonijn-water", name: "AH Tonijn in water", brand: "AH", size: "3 x 56 g" }),
+      purchase("pur-big-minoes", "Minoestuna", { id: "ah-product-minoes-pouch", name: "Felix tonijn pouch", brand: "Felix", size: "85 g" }),
+    ]);
+    // 1500 more items, each with a purchase from today: far more than one answer may hold.
+    for (let start = 0; start < 1500; start += 100) {
+      await send(Array.from({ length: 100 }, (_, k) => {
+        const i = start + k;
+        return purchase(`pur-big-${i}`, `Zzitem ${i} tonijnsalade ${"x".repeat(60)}`, { id: `ah-product-big-${i}`, name: `Zzproduct ${i} ${"y".repeat(40)}`, brand: "AH", size: "1 kg" });
+      }));
+    }
+    const recent = await client.tool("kitchen_recent_purchases", { days: 2 });
+    assert.equal(recent.error, false, recent.text);
+    assert.ok(recent.text.length <= 14_300, `capped, got ${recent.text.length}`);
+    assert.match(recent.text, /\(cut off: \d+ more purchases not shown/);
+    assert.match(recent.text, /AH Tonijn in water, 3 x 56 g \[product: ah-product-tonijn-water\] → item Tonijn/);
+    assert.match(recent.text, /candidate items: .*Minoestuna \[item: /);
+    const tonijnBlock = recent.text.split("\n- ").find((b) => b.includes("ah-product-tonijn-water"));
+    assert.ok((tonijnBlock.split("candidate items: ")[1] ?? "").split(" | ").length <= 15, "at most 15 candidates per purchase");
+    assert.ok(!/All items/.test(recent.text));
+  } finally {
+    client.close();
+    live.close();
+  }
 });

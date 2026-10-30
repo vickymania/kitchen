@@ -45,7 +45,7 @@ export const STATE_DIR = path.join(HOME, "review-state");
 /** The household's own rules for the prompt, next to fetcher/review-prompt.md; optional and private. */
 export const HOUSEHOLD_FILE = "review-household.md";
 
-/** What the prompt gets of the log: its last lines, at most this many characters. */
+/** What the prompt gets of the last run's log: its last lines, at most this many characters. */
 export const LOG_LINES = 120;
 export const LOG_CHARS = 12_000;
 /** A new-purchases file older than this is yesterday's run, not this one. */
@@ -58,6 +58,32 @@ const log = (...a) => console.log(new Date().toISOString(), "review", ...a);
 export function logTail(text, { lines = LOG_LINES, chars = LOG_CHARS } = {}) {
   const tail = String(text ?? "").replace(/\r/g, "").split("\n").filter(Boolean).slice(-lines).join("\n");
   return tail.length > chars ? tail.slice(-chars) : tail;
+}
+
+/** The line fetcher/run.sh writes first in every run: "<iso> run start". */
+export const RUN_START = /^\S+ run start$/;
+
+/** The calendar day of an ISO timestamp in Europe/Amsterdam (the household's day), or "". */
+export function amsterdamDay(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+/**
+ * The log of the most recent run only: from its last "run start" line on. A
+ * run that did not start today (Europe/Amsterdam), or a log without any marker,
+ * gives a note instead of old errors (30-10-2026: yesterday's Lidl errors were
+ * reported after they were solved).
+ */
+export function lastRunLog(text, today, opts = {}) {
+  const all = String(text ?? "").replace(/\r/g, "").split("\n").filter(Boolean);
+  let start = -1;
+  for (let i = all.length - 1; i >= 0; i--) if (RUN_START.test(all[i])) { start = i; break; }
+  if (start < 0) return "(no run today yet: the log has no run start line)";
+  const day = amsterdamDay(all[start].split(" ")[0]);
+  if (day !== today) return `(no run today yet: the last run in the log started on ${day || "an unknown day"}; its lines are left out)`;
+  return logTail(all.slice(start).join("\n"), opts);
 }
 
 /** The run's own errors, read from the log tail by rule (the fallback when Claude gives no report). */
@@ -132,7 +158,7 @@ export function prepare({ home = HOME, stateDir = STATE_DIR, today = localToday(
   } catch {
     // none: the general rules only
   }
-  fs.writeFileSync(path.join(stateDir, "prompt.txt"), buildPrompt({ template, today, log: logTail(logText), purchases: newPurchases(home, now), household }));
+  fs.writeFileSync(path.join(stateDir, "prompt.txt"), buildPrompt({ template, today, log: lastRunLog(logText, today), purchases: newPurchases(home, now), household }));
   fs.writeFileSync(path.join(stateDir, "mcp.json"), JSON.stringify(mcpConfig(home), null, 2));
   return true;
 }

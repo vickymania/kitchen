@@ -5,10 +5,15 @@ Today is {{TODAY}}. You have the kitchen tools only. The data is Dutch.
 
 ## Do this
 
-1. Read the run log and the new purchases at the end. Note every error in the
+1. Read the run log and the new purchases at the end. If the log says there
+   was no run today yet, report no run errors from it. Note every error in the
    run itself: a FAILED line, an exit code that is not 0, "refused".
-2. Call kitchen_recent_purchases once with days 2 and all_items true. It shows
-   each new purchase with its product and the item it landed on.
+2. Call kitchen_recent_purchases once with days 2. It shows each new purchase
+   with its product and the item it landed on, and under it a few candidate
+   items that might fit better (the output is short and capped; if it says it
+   was cut off, call it again with days 1). How a purchase was mapped (exact,
+   rule, table, guess) is in the new purchases below; a guess deserves the
+   closest look.
 3. Judge every new product's item with the household's own items, other names,
    its rules below and these:
    - Pet food and pet things belong to the pet's own items.
@@ -55,7 +60,7 @@ Answer with one JSON object and nothing else:
   samenvoegen met Tomatensaus?"
 - Empty lists when there is nothing.
 
-## Run log (last lines)
+## Run log (this morning's run only)
 
 {{LOG}}
 

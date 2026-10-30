@@ -26,6 +26,8 @@ if [ -f "$LOG" ] && [ "$(wc -c < "$LOG")" -gt 524288 ]; then
   mv "$LOG" "$LOG.1"
 fi
 cd "$DIR" || exit 1
+# The start marker of this run: fetcher/review.mjs reads the log from the last one on.
+echo "$(date -Is) run start" >> "$LOG"
 /usr/bin/node "$DIR/fetcher/fetch.mjs" "$MODE" >> "$LOG" 2>&1
 echo "$(date -Is) exit $?" >> "$LOG"
 # The receipts run whatever the deals did: they do not depend on each other.

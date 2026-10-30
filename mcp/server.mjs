@@ -30,6 +30,10 @@ import { didYouMean } from "../public/shared/suggest.js";
 import { compactKey } from "../public/shared/item-names.js";
 import { findItem } from "../public/shared/ops.js";
 import { addDays } from "../public/shared/shelf-life.js";
+
+/** kitchen_recent_purchases: candidate items per purchase, and the output size (Claude cannot read more). */
+const CANDIDATES_MAX = 15;
+const RECENT_CHARS_MAX = 14_000;
 import { starsByRecipe } from "../public/shared/recipe-ratings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -675,14 +679,20 @@ const TOOLS = [
   },
   {
     name: "kitchen_recent_purchases",
-    description: "What was bought lately on receipts (AH, Lidl, a receipt photo), never excluded products: per product the day, store, how many, the product (with its id) and the item it is linked to (with the item's other names, whether it is counted down at a usage rate, and the item's other products). Use it to check product-to-item links. days: how far back by the day the purchase was added (default 2). all_items: true also lists every item name with its number of purchases, to spot two names for one thing.",
-    inputSchema: { type: "object", properties: { days: { type: "integer", minimum: 1, maximum: 30 }, all_items: { type: "boolean" } } },
-    async run({ days = 2, all_items = false }) {
+    description: "What was bought lately on receipts (AH, Lidl, a receipt photo), never excluded products, compact and capped: per purchase the day, store, how many, the product (with its id) and the item it is linked to (with the item's other names, whether it is counted down at a usage rate, and the item's other products), then at most 15 CANDIDATE items that might fit better (items sharing a word with the product or its item, and items counted down at a usage rate). Use it to check product-to-item links. days: how far back by the day the purchase was added (default 2). The output stops at a fixed size with a note when cut.",
+    inputSchema: { type: "object", properties: { days: { type: "integer", minimum: 1, maximum: 30 } } },
+    async run({ days = 2 }) {
       const s = await state();
       const since = addDays(localToday(), -days);
       const purchases = [...cache.purchases.values()];
       const products = new Map(s.products.map((p) => [p.id, p]));
-      const aliasesOf = (itemId) => Object.values(s.names.aliases).filter((a) => a.item_id === itemId && !a.deleted_at).map((a) => a.name).sort();
+      const aliasesByItem = new Map();
+      for (const a of Object.values(s.names.aliases)) {
+        if (a.deleted_at) continue;
+        if (!aliasesByItem.has(a.item_id)) aliasesByItem.set(a.item_id, []);
+        aliasesByItem.get(a.item_id).push(a.name);
+      }
+      const aliasesOf = (itemId) => (aliasesByItem.get(itemId) ?? []).sort();
       const bad = (txt) => isExcluded(txt ?? "");
       const groups = new Map();
       for (const r of purchases) {
@@ -696,24 +706,51 @@ const TOOLS = [
         g.n += Number(r.qty) || 1;
         groups.set(key, g);
       }
-      const lines = [...groups.values()].sort((a, b) => String(b.r.bought_on).localeCompare(String(a.r.bought_on)) || (a.it?.name ?? "").localeCompare(b.it?.name ?? ""))
+      // Candidates: every live, non-excluded item with the words that name it
+      // (its name, other names and its products' names) and its usage rate.
+      const productsByItem = new Map();
+      for (const p of s.products) {
+        if (!p.item_id) continue;
+        if (!productsByItem.has(p.item_id)) productsByItem.set(p.item_id, []);
+        productsByItem.get(p.item_id).push(p);
+      }
+      const stemsOf = (text) => new Set(String(text ?? "").toLowerCase().split(/[^a-z0-9À-ɏ]+/).filter((w) => w.length >= 4).map((w) => w.slice(0, 5)));
+      const pool = [...s.items.values()].filter((i) => !i.deleted_at && !bad(i.name)).map((i) => {
+        const aka = aliasesOf(i.id);
+        const own = productsByItem.get(i.id) ?? [];
+        const rate = rowRate({ title: i.name, pack_size: "" }, i);
+        return { i, aka, rate, stems: stemsOf([i.name, ...aka, ...own.filter((x) => !bad(x.name)).slice(0, 8).map((x) => x.name)].join(" ")) };
+      });
+      const candidatesFor = (p, it) => {
+        const want = stemsOf(`${p?.name ?? ""} ${it?.name ?? ""}`);
+        return pool.filter((c) => c.i.id !== it?.id)
+          .map((c) => ({ c, shared: [...want].filter((w) => c.stems.has(w)).length }))
+          .filter((x) => x.shared > 0 || x.c.rate)
+          .sort((a, b) => (b.shared * 2 + Number(Boolean(b.c.rate))) - (a.shared * 2 + Number(Boolean(a.c.rate))) || a.c.i.name.localeCompare(b.c.i.name, "nl"))
+          .slice(0, CANDIDATES_MAX)
+          .map(({ c }) => `${c.i.name} [item: ${c.i.id}]${c.aka.length ? ` (aka ${c.aka.slice(0, 3).join(", ")})` : ""}${c.rate ? ` {${rateEn(c.rate.per_day)}}` : ""}`);
+      };
+      const blocks = [...groups.values()].sort((a, b) => String(b.r.bought_on).localeCompare(String(a.r.bought_on)) || (a.it?.name ?? "").localeCompare(b.it?.name ?? ""))
         .map(({ r, p, it, n }) => {
-          const others = it ? s.products.filter((x) => x.item_id === it.id && x.id !== p?.id && !bad(x.name)).slice(0, 5).map(productLabel) : [];
+          const others = it ? s.products.filter((x) => x.item_id === it.id && x.id !== p?.id && !bad(x.name)).slice(0, 3).map(productLabel) : [];
           const rate = it ? rowRate({ title: it.name, pack_size: "" }, it) : null;
           const names = it ? aliasesOf(it.id) : [];
+          const cands = candidatesFor(p, it);
           return `- ${r.bought_on} ${r.store ?? "?"} ${n}x ${p ? `${productLabel(p)} [product: ${p.id}]` : `"${r.title}" (no product)`} → item ${it ? `${it.name} [item: ${it.id}]` : "(none)"}`
-            + `${names.length ? `; other names: ${names.join(", ")}` : ""}${rate ? `; counted down: ${rateEn(rate.per_day)}` : ""}`
-            + `${others.length ? `; other products of this item: ${others.join("; ")}` : ""}`;
+            + `${names.length ? `; other names: ${names.slice(0, 5).join(", ")}` : ""}${rate ? `; counted down: ${rateEn(rate.per_day)}` : ""}`
+            + `${others.length ? `; other products of this item: ${others.join("; ")}` : ""}`
+            + `${cands.length ? `\n    candidate items: ${cands.join(" | ")}` : ""}`;
         });
-      const out = [lines.length ? `Receipt purchases since ${since}:\n${lines.join("\n")}` : `No receipt purchases since ${since}.`];
-      if (all_items) {
-        const count = new Map();
-        for (const r of purchases) if (!r.deleted_at) count.set(r.item_id, (count.get(r.item_id) ?? 0) + 1);
-        const names = [...s.items.values()].filter((i) => !i.deleted_at && !bad(i.name))
-          .sort((a, b) => a.name.localeCompare(b.name, "nl")).map((i) => `${i.name} (${count.get(i.id) ?? 0})`);
-        out.push(`All items (purchases): ${names.join(", ")}`);
+      if (!blocks.length) return `No receipt purchases since ${since}.`;
+      let text = `Receipt purchases since ${since} (${blocks.length}):`;
+      let shown = 0;
+      for (const b of blocks) {
+        if (text.length + b.length + 1 > RECENT_CHARS_MAX) break;
+        text += `\n${b}`;
+        shown++;
       }
-      return out.join("\n\n");
+      if (shown < blocks.length) text += `\n(cut off: ${blocks.length - shown} more purchases not shown; ask again with days 1)`;
+      return text;
     },
   },
   {
