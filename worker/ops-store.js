@@ -659,6 +659,13 @@ async function load(db, hh, op, memberId) {
       // list lines (their items) and the preferences (the product to compare with).
       await loadInto(db, hh, s, "entries", "deleted_at IS NULL AND checked_at IS NULL");
       await loadInto(db, hh, s, "preferences", "deleted_at IS NULL");
+      // How often he bought each product: the most bought one is compared first (referenceProduct).
+      {
+        const { results } = await db.prepare(
+          "SELECT product_id, COUNT(*) AS n FROM purchases WHERE household_id = ? AND deleted_at IS NULL AND product_id IS NOT NULL GROUP BY product_id",
+        ).bind(hh).all();
+        s.purchase_counts = Object.fromEntries(results.map((r) => [r.product_id, Number(r.n)]));
+      }
       await loadInto(db, hh, s, "store_prices", "store = ?", canonicalStore(String(op.store ?? "")));
       break;
     case "review.save":

@@ -14,6 +14,7 @@ import { applyOp, emptyState } from "../public/shared/ops.js";
 import { packSize, pricesOf, storePriceId } from "../public/shared/store-prices.js";
 import {
   unitPrice, packRatio, comparableTarget, comparableTargets, matchComparables, rowComparable, referenceProduct, comparablePriceId, PACK_TOLERANCE,
+  itemTargets, comparableReason,
 } from "../public/shared/comparable-prices.js";
 import { linePrices, productPrices, lineQty, pickLinePrice, homeStore, listPrices, storeTotal, compareStores } from "../public/shared/line-prices.js";
 import { hiddenOf, rowHidden } from "../worker/privacy.js";
@@ -30,6 +31,7 @@ const PEPPER = { id: "item-pepr-000001", name: "Peper" };
 const AH_EGGS = { id: "ah-product-910001", item_id: EGGS.id, brand: "AH", name: "AH Scharrel eieren", size: "10 stuks", store: "Albert Heijn", updated_at: "2026-10-20" };
 const AH_MILK = { id: "ah-product-910002", item_id: MILK.id, brand: "AH", name: "AH Houdbare halfvolle melk", size: "1 l", store: "Albert Heijn", updated_at: "2026-10-20" };
 const AH_ROLLS = { id: "ah-product-910003", item_id: ROLLS.id, brand: "AH", name: "AH Schnittbroodjes", size: "6 stuks", store: "Albert Heijn", updated_at: "2026-10-20" };
+const AH_PEPPER = { id: "ah-product-910005", item_id: PEPPER.id, brand: "AH", name: "AH Peper", size: "35 g", store: "Albert Heijn", updated_at: "2026-10-20" };
 const AH_SPROUTS = { id: "ah-product-910004", item_id: SPROUTS.id, brand: "AH", name: "AH Spruitjes", size: "500 g", store: "Albert Heijn" };
 
 // Dirk's rows as Checkjebon writes them: [name, size, cents, ref].
@@ -98,11 +100,143 @@ test("comparable negatives: another kind, a far pack, a variant, a head that is 
   assert.equal(unsized.size, null);
 });
 
-test("comparable: an item without a product of his compares by its name, the cheapest pack", () => {
-  const t = comparableTarget(PEPPER, null);
-  assert.deepEqual([t.product_id, t.size], ["", null]);
-  const got = matchComparables([t], DIRK).get(PEPPER.id);
-  assert.deepEqual([got.name, got.cents], ["Dirk Peper", 99]);
+test("comparable: an item without a product of his gets none; a guess by its name is no price", () => {
+  const s = emptyState();
+  s.items[PEPPER.id] = PEPPER;
+  s.entries["e-pepper"] = { id: "e-pepper", item_id: PEPPER.id, title: "Peper", created_at: "x" };
+  assert.deepEqual(comparableTargets(s), []);
+  s.products = { [AH_PEPPER.id]: { ...AH_PEPPER } }; // a new products object: the per-item index is built once per object
+  const got = matchComparables(comparableTargets(s), DIRK).get(PEPPER.id);
+  assert.deepEqual([got.name, got.cents], ["Dirk Peper", 99], "with his product it compares");
+});
+
+test("the product compared with: the one he bought most, then the newest; a variant only without a plain one", () => {
+  const s = emptyState();
+  s.items[EGGS.id] = EGGS;
+  const plain = { id: "p-eggs-plain", item_id: EGGS.id, brand: "Eigen", name: "Eigen Scharreleieren", size: "10 stuks", updated_at: "2026-10-10" };
+  const newer = { id: "p-eggs-newer", item_id: EGGS.id, brand: "Eigen", name: "Eigen Vrije uitloop eieren", size: "6 stuks", updated_at: "2026-10-15" };
+  const organic = { id: "p-eggs-bio", item_id: EGGS.id, brand: "Eigen Biologisch", name: "Eigen Biologisch Eieren", size: "6 stuks", updated_at: "2026-10-25" };
+  Object.assign(s.products, { [plain.id]: plain, [newer.id]: newer, [organic.id]: organic });
+  assert.equal(referenceProduct(s, EGGS.id).id, newer.id, "no purchases: the newest plain one, never the organic one");
+  s.purchases = { a: { id: "a", product_id: plain.id }, b: { id: "b", product_id: plain.id }, c: { id: "c", product_id: newer.id },
+    d: { id: "d", product_id: organic.id }, e: { id: "e", product_id: organic.id }, f: { id: "f", product_id: organic.id } };
+  assert.equal(referenceProduct(s, EGGS.id).id, plain.id, "the one he bought most of the plain ones");
+  assert.equal(referenceProduct({ ...s, purchase_counts: { [newer.id]: 9 } }, EGGS.id).id, newer.id, "the server's counts");
+  assert.ok(itemTargets(s, EGGS.id).every((t) => t.product_id !== organic.id), "organic eggs are never compared while he has plain ones");
+  delete s.products[plain.id];
+  delete s.products[newer.id];
+  assert.equal(referenceProduct({ ...s, products: { [organic.id]: organic } }, EGGS.id).id, organic.id, "only organic ones: those");
+  s.preferences = { pr: { id: "pr", item_id: EGGS.id, store: "", recipe_id: "", product_id: organic.id } };
+  assert.equal(referenceProduct({ ...s, products: { [organic.id]: organic, [plain.id]: plain } }, EGGS.id).id, organic.id, "his own preference stays his choice");
+});
+
+// ------------------------------------------- tuned on real rows (30-10-2026)
+
+/** The targets of one fictional item with his products, newest first. */
+function targetsOf(name, products) {
+  const id = `item-t-${name.toLowerCase().replace(/\W+/g, "-")}`;
+  const s = { items: { [id]: { id, name } }, products: {}, entries: {}, preferences: {} };
+  products.forEach((p, i) => { s.products[`p-${i}`] = { id: `p-${i}`, item_id: id, updated_at: `2026-10-${20 - i}`, ...p }; });
+  return { id, targets: itemTargets(s, id) };
+}
+/** Does any of the item's targets take this row? */
+const takes = (ts, name) => ts.some((t) => rowComparable(t, name));
+/** The row the matcher picks for the item, or null. */
+const pick = ({ id, targets }, rows) => matchComparables(targets, rows).get(id) ?? null;
+
+test("tuned: pack and shape words after the matched ones are fine; the item's noun with his product's grade", () => {
+  // The item-level target needs one of his products to name the item ("Huis Witte kaas"): kaas is what he means by it.
+  const cheese = targetsOf("Kaas", [{ brand: "Huis", name: "Huis Goudse jong 30+ plakken", size: "190 g" }, { brand: "Huis", name: "Huis Witte kaas", size: "200 g" }]);
+  assert.ok(takes(cheese.targets, "Huis Jonge kaas plakken"), "jonge kaas plakken is his goudse jong");
+  assert.ok(takes(cheese.targets, "Huis Goudse kaas jong voordeelverpakking"), "a pack word after the matched ones");
+  assert.equal(takes(cheese.targets, "Huis Oude kaas plakken"), false, "oud is another grade");
+  assert.equal(takes(cheese.targets, "Huis Geitenkaas plakken"), false, "geitenkaas is no kaas");
+  assert.equal(takes(cheese.targets, "Huis Goudse kaas jong 40+"), false, "another fat class");
+  assert.equal(takes(cheese.targets, "Huis Kaas plakken"), false, "no grade: unsure");
+  const plain = targetsOf("Kaas", [{ brand: "Eigen", name: "Eigen Goudse kaas plakken", size: "190 g" }]);
+  assert.ok(takes(plain.targets, "Merk Goudse kaas plakken"));
+  assert.equal(takes(plain.targets, "Oude Goudse kaas plakken"), false, "a grade in front is no brand");
+  assert.equal(pick(cheese, [["Huis Jonge kaas plakken", "200 g", 219, ""], ["Huis Jonge kaas plakken", "500 g", 399, ""]])?.cents, 219, "only a pack within the tolerance");
+});
+
+test("tuned: a compound counts only when every part is his", () => {
+  const paper = targetsOf("Wc papier", [{ brand: "Eigen", name: "Eigen Toiletpapier 4-laags", size: "8 rollen" }]);
+  assert.ok(takes(paper.targets, "Huis Toiletpapier 4 laags"));
+  assert.equal(takes(paper.targets, "Huis Keukenpapier 4 laags"), false, "kitchen paper is another kind");
+  assert.equal(takes(paper.targets, "Huis Toiletpapier 3-laags"), false, "three layers is another product");
+  const eggs = targetsOf("Eieren", [{ brand: "Eigen", name: "Eigen Witte vrije uitloopeieren", size: "6 stuks" }]);
+  assert.ok(takes(eggs.targets, "Huis Witte vrije uitloop eieren"), "the parts of his compound written apart");
+  assert.equal(takes(eggs.targets, "Huis Gekleurde eieren"), false, "coloured eggs are another thing");
+  assert.equal(takes(eggs.targets, "Paaseieren"), false);
+  const tins = targetsOf("Tomatenblokjes", [{ brand: "Eigen", name: "Eigen Tomatenblokjes", size: "400 g" }]);
+  assert.equal(pick(tins, [["Merk Tomaten blokjes", "390 g", 99, ""]])?.cents, 99, "two words written apart are his one");
+  assert.equal(pick(tins, [["Merk Tomatenblokjes knoflook", "400 g", 89, ""]]), null, "a word of its own after his");
+});
+
+test("tuned: careful synonyms; never sojasaus for ketjap", () => {
+  const litter = targetsOf("Kattenbakvulling", [{ brand: "Eigen", name: "Eigen Kattenbakvulling ultra", size: "6 l" }]);
+  assert.equal(pick(litter, [["Merk Kattengrind", "7 liter", 199, ""]])?.cents, 199, "kattengrind is kattenbakvulling");
+  assert.equal(pick(litter, [["Merk Kattengrind", "20 liter", 499, ""]]), null, "a far pack");
+  const soy = targetsOf("Sojasaus", [{ brand: "Merk", name: "Merk soy", size: "" }]);
+  assert.ok(takes(soy.targets, "Huis Sojasaus"));
+  assert.equal(takes(soy.targets, "Huis Ketjap manis"), false, "ketjap is another sauce");
+  assert.equal(takes(soy.targets, "Huis Sojasaus zoet"), false, "sweet soy is another sauce");
+  const rolls = targetsOf("Broodjes", [{ brand: "Eigen", name: "Eigen Witte bollen", size: "6 stuks" }]);
+  assert.ok(takes(rolls.targets, "Huis Witte broodjes"), "bollen and broodjes, both white");
+  assert.equal(takes(rolls.targets, "Huis Bruine broodjes"), false, "brown is another kind");
+});
+
+test("tuned: bags compare by their litres, never a bag of unknown size", () => {
+  const bags = targetsOf("Vuilniszakken", [{ brand: "Merk", name: "Merk Trekbandzakken 60 liter", size: "15 stuks" }]);
+  assert.equal(pick(bags, [["Huis Afvalzakken 50 liter", "20 stuks", 149, ""]])?.cents, 149, "a 50 l bag for his 60 l, per bag");
+  assert.equal(pick(bags, [["Huis Pedaalemmerzakken 20 liter", "20 stuks", 99, ""]]), null, "a pedal bin bag is a third of it");
+  assert.equal(pick(bags, [["Huis Vuilniszakken", "20 stuks", 99, ""]]), null, "unknown litres: unsure");
+});
+
+test("tuned: flavoured is not plain, another fat level or dish is another product", () => {
+  const quark = targetsOf("Kwark", [{ brand: "Eigen", name: "Eigen Magere kwark", size: "500 g" }]);
+  assert.ok(takes(quark.targets, "Merk Magere kwark"));
+  assert.equal(takes(quark.targets, "Merk Magere kwark aardbei"), false, "flavoured");
+  assert.equal(takes(quark.targets, "Merk Vanillekwark"), false, "flavoured, in one word");
+  assert.equal(takes(quark.targets, "Merk Volle kwark"), false, "another fat level");
+  const yog = targetsOf("Griekse yoghurt", [{ brand: "Merk", name: "Merk Yoghurt Griekse stijl 10% vet", size: "1 kg" }]);
+  assert.ok(takes(yog.targets, "Huis Griekse yoghurt 10% vet"));
+  assert.equal(takes(yog.targets, "Huis Griekse yoghurt 2% vet"), false, "another fat percentage");
+  const salad = targetsOf("Salade", [{ brand: "Eigen", name: "Eigen Kip ketjap", size: "450 g" }]);
+  assert.ok(takes(salad.targets, "Huis Kip ketjap"));
+  assert.equal(takes(salad.targets, "Huis Kip ketjap met mihoen goreng"), false, "what it comes with makes it a meal");
+  const mush = targetsOf("Champignons", [{ brand: "Eigen", name: "Eigen Kastanjechampignons", size: "400 g" }]);
+  assert.equal(takes(mush.targets, "Merk Ragout champignon"), false, "a ragout is a dish");
+  assert.equal(takes(mush.targets, "Roerbakgroenten Champignon"), false, "a vegetable mix");
+});
+
+test("tuned: medicine only by his own product; a generic name never; his products before the item's noun", () => {
+  const spray = targetsOf("Neusspray", [{ brand: "Eigen", name: "Eigen Neusspray xylometazoline", size: "10 ml" }]);
+  assert.equal(spray.targets.some((t) => t.level === "item"), false, "no item-level target for medicine");
+  assert.equal(takes(spray.targets, "Merk Zoutoplossing neusspray"), false, "another medicine");
+  const drops = targetsOf("Oogdruppels", [{ brand: "Eigen", name: "Eigen Oogdruppels droge ogen", size: "10 ml" }]);
+  assert.equal(drops.targets.some((t) => t.level === "item"), false, "medicine by its name too, when its kind is unknown");
+  const pills = targetsOf("Pijnstiller", [{ brand: "Eigen", name: "Eigen Paracetamol 500mg tabletten", size: "50 stuks" }]);
+  assert.ok(takes(pills.targets, "Huis Paracetamol 500mg"), "the same dose; tabletten is its form");
+  assert.equal(takes(pills.targets, "Huis Paracetamol 120mg"), false, "another dose");
+  assert.equal(targetsOf("Snack", []).targets.length, 0, "a word that is no product gets nothing");
+  const peas = targetsOf("Erwten", [
+    { brand: "Eigen", name: "Eigen Doperwten extra fijn", size: "400 g" },
+    { brand: "Merk", name: "Merk Erwten", size: "400 g" },
+  ]);
+  const got = pick(peas, [["Huis Doperwten extra fijn", "400 g", 129, ""], ["Huis Erwten", "400 g", 79, ""]]);
+  assert.equal(got.cents, 129, "his reference product's match beats a cheaper one of a later rank");
+  assert.equal(got.product_id, "p-0");
+});
+
+test("tuned: a loose piece without a size is one piece; a store brand keeps its variant", () => {
+  const cucumber = targetsOf("Komkommer", [{ brand: "Eigen", name: "Eigen Komkommer", size: "per stuk" }]);
+  assert.equal(pick(cucumber, [["Huis Komkommer", "", 75, ""]])?.cents, 75);
+  assert.equal(pick(cucumber, [["Huis Komkommer", "3 stuks", 199, ""]]), null, "three is no one");
+  const bio = targetsOf("Eieren", [{ brand: "Eigen Biologisch", name: "Eigen Biologisch Eieren", size: "6 stuks" }]);
+  assert.equal(takes(bio.targets, "Huis Eieren"), false, "his are organic");
+  assert.ok(takes(bio.targets, "Huis Biologische eieren"));
+  assert.equal(comparableReason(bio.targets[0], "Huis Eieren"), "missing: biologisch");
 });
 
 test("targets: the items he has a product of and the open list lines; the product to compare with", () => {
@@ -112,7 +246,7 @@ test("targets: the items he has a product of and the open list lines; the produc
   Object.assign(s.products, { [AH_EGGS.id]: AH_EGGS, [AH_MILK.id]: AH_MILK, [newer.id]: newer });
   s.entries["e-pepper"] = { id: "e-pepper", item_id: PEPPER.id, title: "Peper", created_at: "x" };
   s.entries["e-done"] = { id: "e-done", item_id: "item-none-000001", title: "Kaas", checked_at: "x", created_at: "x" };
-  assert.deepEqual(comparableTargets(s).map((t) => t.item_id).sort(), [EGGS.id, MILK.id, PEPPER.id].sort(), "not a ticked line's item");
+  assert.deepEqual([...new Set(comparableTargets(s).map((t) => t.item_id))].sort(), [EGGS.id, MILK.id].sort(), "not a ticked line's item, not an item without a product of his");
   assert.equal(referenceProduct(s, MILK.id).id, newer.id, "the newest product");
   s.items[MILK.id] = { ...MILK, preferred_product_id: AH_MILK.id };
   assert.equal(referenceProduct(s, MILK.id).id, AH_MILK.id, "the preferred one first");
@@ -125,7 +259,7 @@ test("targets: the items he has a product of and the open list lines; the produc
 function priceState() {
   const s = emptyState();
   Object.assign(s.items, { [EGGS.id]: EGGS, [MILK.id]: MILK, [ROLLS.id]: ROLLS, [SPROUTS.id]: SPROUTS, [PEPPER.id]: PEPPER });
-  for (const p of [AH_EGGS, AH_MILK, AH_ROLLS, AH_SPROUTS]) s.products[p.id] = { ...p };
+  for (const p of [AH_EGGS, AH_MILK, AH_ROLLS, AH_SPROUTS, AH_PEPPER]) s.products[p.id] = { ...p };
   s.entries["e-pepper"] = { id: "e-pepper", item_id: PEPPER.id, title: "Peper", created_at: "x" };
   return s;
 }
@@ -271,6 +405,8 @@ test("privacy: a comparable row of a private item is hidden from the others, on 
   await send({ cookie: thomas }, [
     op({ type: "entry.add", id: "entry-pv2-zalf01", item_id: "item-pv2-zalf001", title: "Voetzalf" }),
     op({ type: "entry.add", id: "entry-pv2-peper1", item_id: PEPPER.id, title: "Peper" }),
+    op({ type: "product.put", id: "product-pv2-zalf01", product: { name: "Merk Voetzalf", brand: "Merk", size: "75 ml", store: "Albert Heijn", item_id: "item-pv2-zalf001" } }),
+    op({ type: "product.put", id: "product-pv2-peper1", product: { name: "Merk Peper", brand: "Merk", size: "35 g", store: "Albert Heijn", item_id: PEPPER.id } }),
     op({ type: "item.private", item_id: "item-pv2-zalf001", private: true }),
   ]);
   await send({ bearer: importer }, [op({ type: "prices.sync", store: "Dirk", day: DAY, rows: [...DIRK, ["Huis Voetzalf", "75 ml", 459, ""]] })]);
