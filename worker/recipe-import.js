@@ -53,7 +53,7 @@ const RECIPE_PROPERTIES = {
     description: "One line per ingredient as written, amount first (\"200 g bloem\", \"2 uien\", \"snufje zout\"). A sub-heading is its own line ending in a colon (\"Saus:\")",
   },
   steps: { type: "array", items: { type: "string" }, description: "One line per step, without its number" },
-  notes: { type: "string", description: "Tips or variations written with the recipe, else empty" },
+  notes: { type: "string", description: "Everything else written with the recipe, in its own words: the introduction above it, tips, variations, and the equipment it lists (as \"Benodigdheden: frituurpan, spuitzak, …\"); empty only when there is nothing" },
   ...LABEL_SCHEMA.properties,
 };
 const RECIPE_REQUIRED = ["is_recipe", "title", "servings", "ingredients", "steps", "notes", ...LABEL_SCHEMA.required];
@@ -230,7 +230,8 @@ export function draftFromJsonLd(node) {
     servings: servingsOf(yieldText.match(/\d+/)?.[0]),
     ingredients,
     steps: stepsOf(node.recipeInstructions),
-    notes: "",
+    // The page's own introduction (30-10-2026: the notes stayed empty while a fine text sat above the recipe).
+    notes: line(stripTags(String(node.description ?? "")), 2000),
     // The labels are Claude's job after the save (worker/labels.js), as for a typed recipe.
     labels: null,
     dish: null,

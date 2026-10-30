@@ -145,6 +145,7 @@ test("JSON-LD: a real-world-shaped page gives the recipe without Claude", () => 
   const d = draftFromJsonLd(found[0]);
   assert.equal(d.title, "Hutspot met draadjesvlees & jus");
   assert.equal(d.servings, 4);
+  assert.equal(d.notes, "Stamppot met lang gestoofd, zacht vlees.", "the page's introduction goes into the notes");
   assert.deepEqual(d.ingredients, [
     "1 kg draadjesvlees", "2 uien", "½ el bloem", "1,5 kg kruimige aardappelen", "1 kg winterpeen", "2 laurierblaadjes", "1 boterham met mosterd",
   ]);
