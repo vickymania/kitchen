@@ -17,11 +17,12 @@ import { brandedName } from "../public/shared/offers.js";
 import { applyOp, emptyState, OpError } from "../public/shared/ops.js";
 import {
   parseCheckjebon, matchStorePrices, pricesOf, oldPricesDay, packSize, samePack, isDealNote, storePriceId, PRICE_STORES,
-  MIN_STORE_ROWS, MAX_PRICE_WRITES,
+  MIN_STORE_ROWS, MAX_PRICE_WRITES, MAX_PRICE_RESULTS,
 } from "../public/shared/store-prices.js";
+import { storePriceResults, comparablePriceId } from "../public/shared/comparable-prices.js";
 import { liveLineOffers, dealNote, dealsFor } from "../public/shared/deals.js";
 import { currentOffers } from "../public/shared/offers.js";
-import { priceOps, runPrices, commitDay, runStamp } from "../fetcher/prices.mjs";
+import { priceOps, runPrices, commitDay, runStamp, inputsState, fetchInputs } from "../fetcher/prices.mjs";
 import { stripOps } from "../tools/strip_offer_notes.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -147,12 +148,14 @@ function priceState() {
   return s;
 }
 const ctx = { memberId: "m1", isAdmin: true, now: "2026-10-30T05:20:00.000Z" };
+/** The op the home server sends for these raw Checkjebon rows: matched against the state first (fetcher/prices.mjs). */
+const raw = (s, store, day, rows) => ({ type: "prices.sync", store, day, rows: storePriceResults(s, rows, store) });
 
 test("op prices.sync: keeps only his products, writes only what changed, tombstones what is gone, ignores older data", () => {
   const s = priceState();
-  const op = (day, rows) => ({ type: "prices.sync", store: "dirk", day, rows });
+  const op = (day, rows) => raw(s, "dirk", day, rows);
   const first = applyOp(s, op(DAY, ROWS.dirk), ctx);
-  assert.deepEqual(first.result, { matched: 1, comparable: 0, written: 1, left: 0 });
+  assert.deepEqual(first.result, { matched: 1, comparable: 0, refused: 0, written: 1, left: 0 });
   const id = storePriceId("Dirk", HAMKAS.id);
   assert.equal(Object.keys(s.store_prices).length, 1, "one row, not the store's whole list");
   assert.deepEqual([s.store_prices[id].store, s.store_prices[id].price_cents, s.store_prices[id].price_on], ["Dirk", 149, DAY]);
@@ -165,7 +168,14 @@ test("op prices.sync: keeps only his products, writes only what changed, tombsto
   const gone = applyOp(s, op("2026-11-01", ROWS.dirk.filter((r) => r[0] !== "Crispy's Hamka's")), ctx);
   assert.ok(s.store_prices[id].deleted_at, "no match any more: a tombstone");
   assert.equal(gone.result.matched, 0);
-  for (const bad of [{ store: "Lidl" }, { store: "Vomar" }, { day: "gisteren" }, { rows: [["x", "", -1, ""]] }, { rows: "nope" }]) {
+  const good = { product_id: HAMKAS.id, name: "Crispy's Hamka's", size: "125 g", price_cents: 149 };
+  for (const bad of [{ store: "Lidl" }, { store: "Vomar" }, { day: "gisteren" }, { rows: "nope" },
+    // The old form (the whole store's rows): the worker never matches them.
+    { rows: ROWS.dirk }, { rows: [["x", "", 100, ""]] },
+    { rows: [{ ...good, price_cents: -1 }] }, { rows: [{ ...good, price_cents: 1.5 }] }, { rows: [{ ...good, name: "" }] },
+    { rows: [good, good] }, { rows: [{ ...good, item_id: "item-chips-000001" }] }, { rows: [{ ...good, product_id: undefined }] },
+    { rows: [{ ...good, comparable: 1, product_id: null }] }, { rows: [{ ...good, comparable: "yes" }] },
+    { rows: Array.from({ length: MAX_PRICE_RESULTS + 1 }, (_, i) => ({ ...good, product_id: `p-${i}` })) }]) {
     assert.throws(() => applyOp(priceState(), { ...op(DAY, ROWS.dirk), ...bad }, ctx), OpError, JSON.stringify(bad));
   }
 });
@@ -180,12 +190,76 @@ test("op prices.sync: at most MAX_PRICE_WRITES rows, new prices before refreshed
     s.products[`p-${i}`] = { id: `p-${i}`, brand: "Merk", name: `Merk ${word(i)}`, size: "100 g", store: "Dirk" };
     rows.push([`Merk ${word(i)}`, "100 g", 100 + i, ""]);
   }
-  const first = applyOp(s, { type: "prices.sync", store: "Dirk", day: DAY, rows }, ctx);
-  assert.deepEqual(first.result, { matched: n, comparable: 0, written: MAX_PRICE_WRITES, left: 5 });
-  const next = applyOp(s, { type: "prices.sync", store: "Dirk", day: "2026-10-30", rows }, ctx);
+  const first = applyOp(s, raw(s, "Dirk", DAY, rows), ctx);
+  assert.deepEqual(first.result, { matched: n, comparable: 0, refused: 0, written: MAX_PRICE_WRITES, left: 5 });
+  const next = applyOp(s, raw(s, "Dirk", "2026-10-30", rows), ctx);
   assert.equal(next.result.written, MAX_PRICE_WRITES);
   const newOnes = Array.from({ length: n }, (_, i) => s.store_prices[storePriceId("Dirk", `p-${i}`)]).filter(Boolean);
   assert.equal(newOnes.length, n, "the five left over came first the next day");
+});
+
+test("op prices.sync: results of a product or item that is gone, merged, excluded or another store's own are left out", () => {
+  const s = priceState();
+  s.items["item-gone-0000001"] = { id: "item-gone-0000001", name: "Weg", deleted_at: "x" };
+  s.items["item-merged-00001"] = { id: "item-merged-00001", name: "Oud", deleted_at: "x", merged_into: "item-chips-000001" };
+  s.products["p-lidl"] = { id: "p-lidl", brand: "Merk", name: "Merk Lidl ding", size: "100 g", store: "Lidl", store_only: 1 };
+  s.products["p-gone"] = { id: "p-gone", brand: "Merk", name: "Merk ding", size: "100 g", deleted_at: "x" };
+  const row = (o) => ({ name: "Iets", size: "100 g", price_cents: 199, ...o });
+  const r = applyOp(s, { type: "prices.sync", store: "Dirk", day: DAY, rows: [
+    row({ product_id: HAMKAS.id }), row({ product_id: "p-unknown" }), row({ product_id: "p-gone" }), row({ product_id: "p-lidl" }),
+    row({ product_id: GOUDSE.id, name: "Dirk Spruitjes" }),
+    row({ item_id: "item-gone-0000001", comparable: 1 }), row({ item_id: "item-merged-00001", comparable: 1 }), row({ item_id: "item-nope-0000001", comparable: 1 }),
+    row({ item_id: "item-melk-0000001", comparable: 1, product_id: "p-gone" }),
+    // An exact price of the item wins over its comparable.
+    row({ item_id: "item-chips-000001", comparable: 1, product_id: HAMKAS.id }),
+    row({ item_id: "item-pizza-000001", comparable: 1, product_id: PIZZA.id }),
+    row({ item_id: "item-kaas-0000001", comparable: 1, product_id: null }),
+  ] }, ctx);
+  assert.deepEqual(r.result, { matched: 1, comparable: 2, refused: 9, written: 3, left: 0 });
+  assert.deepEqual(Object.keys(s.store_prices).sort(), [comparablePriceId("Dirk", "item-pizza-000001"), comparablePriceId("Dirk", "item-kaas-0000001"), storePriceId("Dirk", HAMKAS.id)].sort());
+  assert.equal(s.store_prices[comparablePriceId("Dirk", "item-pizza-000001")].product_id, PIZZA.id);
+  assert.equal(s.store_prices[comparablePriceId("Dirk", "item-kaas-0000001")].product_id, "", "the column is NOT NULL: no product is \"\"");
+});
+
+test("op prices.sync: the worker never runs the matcher, and its loader reads only the rows the results name", () => {
+  const ops = fs.readFileSync(path.join(ROOT, "public/shared/ops.js"), "utf8");
+  const imports = ops.split(/\r?\n/).filter((l) => l.startsWith("import ")).join(" ");
+  for (const f of ["matchStorePrices", "matchComparables", "comparableTargets", "storePriceResults", "checkPriceRows"]) assert.ok(!imports.includes(f), `ops.js imports ${f}`);
+  const store = fs.readFileSync(path.join(ROOT, "worker/ops-store.js"), "utf8");
+  const loader = store.slice(store.indexOf('case "prices.sync"'), store.indexOf('case "review.save"'));
+  assert.ok(!loader.includes('"deleted_at IS NULL"') && !loader.includes("purchases"), "no whole table read for prices.sync");
+  assert.ok(loader.includes("loadJsonIds"));
+});
+
+test("op prices.sync: a realistic day (1000 results against 1000 stored rows) is light for the worker", (t) => {
+  const s = emptyState();
+  const word = (i) => `${[...i.toString(26).padStart(3, "0")].map((c) => String.fromCharCode(97 + parseInt(c, 26))).join("")}ding`;
+  for (let i = 0; i < 600; i++) s.products[`p-${i}`] = { id: `p-${i}`, item_id: `i-${i}`, brand: "Merk", name: `Merk ${word(i)}`, size: "100 g", store: "Albert Heijn" };
+  for (let i = 0; i < 1500; i++) s.items[`i-${i}`] = { id: `i-${i}`, name: `Ding ${word(i)}` };
+  const results = [];
+  for (let i = 0; i < 500; i++) results.push({ product_id: `p-${i}`, name: `Dirk ${word(i)}`, size: "100 g", price_cents: 100 + i });
+  for (let i = 600; i < 1100; i++) results.push({ item_id: `i-${i}`, comparable: 1, product_id: null, name: `Dirk ${word(i)} schijfjes`, size: "250 g", price_cents: 150 + i });
+  const op = (day, rows) => ({ type: "prices.sync", store: "Dirk", day, rows });
+  // Yesterday's rows are stored; today half the prices changed.
+  applyOp(s, op(DAY, results), ctx);
+  const today = results.map((r, i) => (i % 2 ? { ...r, price_cents: r.price_cents + 1 } : r));
+  const runs = 20;
+  let ms = 0;
+  let size = 0;
+  for (let k = 0; k < runs; k++) {
+    const copy = structuredClone(s);
+    const body = JSON.stringify({ ops: [op(`2026-11-${String(k + 1).padStart(2, "0")}`, today)] });
+    size = body.length;
+    // What the worker does with the request's body: parse it, check and diff.
+    const t0 = performance.now();
+    const out = applyOp(copy, JSON.parse(body).ops[0], ctx);
+    ms += performance.now() - t0;
+    assert.equal(out.result.written, MAX_PRICE_WRITES, "a new day: every row, capped");
+    assert.equal(out.result.refused, 0);
+  }
+  const avg = ms / runs;
+  t.diagnostic(`prices.sync with ${results.length} results (${Math.round(size / 1024)} kB): ${avg.toFixed(2)} ms per op`);
+  assert.ok(avg < 25, `${avg.toFixed(2)} ms per op`);
 });
 
 // ------------------------------------------------------------- the route
@@ -213,7 +287,14 @@ test("route: only the importer sends prices.sync; the rows reach the phones; not
   assert.equal((await call(env, "POST", "/api/ops", { cookie: thomas, body: { ops: [put(HAMKAS), put(PIZZA)] } })).status, 200);
 
   assert.equal(importerMayApply({ type: "prices.sync" }), true);
-  const sync = (slug) => ({ op_id: `prices-${slug}-${DAY}`, type: "prices.sync", store: PRICE_STORES[slug], day: DAY, rows: ROWS[slug] });
+  // The home server: its inputs from the worker, the matching there (fetcher/prices.mjs).
+  const fetchVia = (url, init) => worker.fetch(new Request(url, { ...init, headers: { ...init.headers, Origin: ORIGIN } }), env);
+  const inputs = await fetchInputs(ORIGIN, importer, fetchVia);
+  assert.deepEqual(inputs.products.map((p) => p.id).sort(), [HAMKAS.id, PIZZA.id].sort());
+  // (The fixture's stores are smaller than MIN_STORE_ROWS, so not priceOps: its matching itself.)
+  const state = inputsState(inputs);
+  const sync = (slug) => ({ op_id: `prices-${slug}-${DAY}`, type: "prices.sync", store: PRICE_STORES[slug], day: DAY, rows: storePriceResults(state, ROWS[slug], PRICE_STORES[slug]) });
+  assert.ok(["dirk", "jumbo", "hoogvliet"].every((slug) => sync(slug).rows.length < 10), "only results go over the wire, not the store's rows");
   // A person's phone never writes prices, not even an admin's.
   assert.equal((await call(env, "POST", "/api/ops", { cookie: thomas, body: { ops: [sync("dirk")] } })).status, 403);
   // The importer still may not send anything else with it.
@@ -235,11 +316,55 @@ test("route: only the importer sends prices.sync; the rows reach the phones; not
   assert.equal((await (await call(env, "GET", "/api/sync?since=0", { cookie: thomas })).json()).rev, before);
 });
 
+test("end to end: the fetcher reads the inputs, matches the Checkjebon file at home and the worker writes the prices", async () => {
+  const env = await makeEnv();
+  await env.DB.exec(await bootstrapSql({ household: "Thuis", name: "Thomas", code: "123456" }));
+  const thomas = tokenOf(await call(env, "POST", "/api/pair", { body: { code: "123456", label: "phone" } }));
+  const code = await (await call(env, "POST", "/api/codes", { cookie: thomas, body: { for: "importer" } })).json();
+  const importer = tokenOf(await call(env, "POST", "/api/pair", { body: { code: code.code, label: "Thuisserver AH" } }));
+  const put = (p) => ({ op_id: opId(), type: "product.put", id: p.id, product: { name: p.name, brand: p.brand, size: p.size, store: "Albert Heijn" } });
+  assert.equal((await call(env, "POST", "/api/ops", { cookie: thomas, body: { ops: [put(HAMKAS), put(PIZZA)] } })).status, 200);
+  // The fixture's stores, filled up to MIN_STORE_ROWS with rows that are nothing of his.
+  const file = FIXTURE.map((shop) => ({ ...shop, d: [...shop.d, ...Array.from({ length: MIN_STORE_ROWS }, (_, i) => ({ n: `Vulmerk vuldingetje ${i}`, l: "x", p: 1, s: "1 st" }))] }));
+  const commits = [{ commit: { committer: { date: "2026-10-29T06:06:06Z" } } }];
+  const get = async (url) => (url.includes("api.github.com") ? commits : file);
+  const sent = [];
+  const via = async (url, init) => {
+    if (init.method === "POST") sent.push(JSON.parse(init.body).ops[0]);
+    return worker.fetch(new Request(url, { ...init, headers: { ...init.headers, Origin: ORIGIN } }), env);
+  };
+  const said = [];
+  const base = { get, post: via, token: importer, origin: ORIGIN, say: (...a) => said.push(a.join(" ")), saveState: () => {}, saveCache: () => {}, cache: null };
+
+  const dry = await runPrices("dry-run", { ...base, state: {} });
+  assert.equal(dry.sent, 0);
+  assert.equal(sent.length, 0, "a dry run reads the inputs and sends nothing");
+  assert.ok(said.some((l) => l.includes("matched exact+comparable") && l.includes('"Dirk":"1+')), said.join("\n"));
+
+  const pushed = await runPrices("push", { ...base, state: {} });
+  assert.ok(pushed.sent >= 3);
+  assert.ok(sent.every((o) => o.rows.length < 10 && o.rows.every((r) => !Array.isArray(r))), "results only");
+  const all = await (await call(env, "GET", "/api/sync?since=0", { cookie: thomas })).json();
+  const got = all.store_prices.filter((r) => !r.comparable).map((r) => [r.store, r.product_id, r.price_cents]).sort();
+  // AH by its own number; the others by brand, name and pack.
+  assert.deepEqual(got, [["Albert Heijn", HAMKAS.id, 209], ["Albert Heijn", PIZZA.id, 499], ["Dirk", HAMKAS.id, 149], ["Hoogvliet", HAMKAS.id, 179],
+    ["Jumbo", PIZZA.id, 499], ["PLUS", HAMKAS.id, 179]]);
+
+  // No inputs (the worker down or the token revoked): nothing sent, an error for run.sh's log.
+  sent.length = 0;
+  const refused = async (url, init) => (init.method === "GET" ? new Response("{}", { status: 403 }) : via(url, init));
+  await assert.rejects(runPrices("push", { ...base, post: refused, state: {} }), /no inputs/);
+  assert.equal(sent.length, 0);
+});
+
 // ------------------------------------------------------------- the fetcher
+
+/** What /api/prices/inputs answers in the fetcher tests: his chips product. */
+const INPUTS = { products: [HAMKAS], items: Object.values(ITEMS), preferences: [], purchase_counts: {}, list_items: [] };
 
 test("fetcher: one op per store with enough rows; small or empty stores keep their old prices", () => {
   const big = { dirk: Array.from({ length: MIN_STORE_ROWS }, (_, i) => [`x${i}`, "", 100, ""]), aldi: [], jumbo: [["a", "", 1, ""]] };
-  const { ops, skipped } = priceOps(big, DAY);
+  const { ops, skipped } = priceOps(big, DAY, inputsState({ products: [], items: [] }));
   assert.deepEqual(ops.map((o) => [o.op_id, o.type, o.store, o.day]), [[`prices-dirk-${DAY}`, "prices.sync", "Dirk", DAY]]);
   assert.equal(skipped.aldi, 0);
   assert.equal(skipped.jumbo, 1);
@@ -255,6 +380,7 @@ test("fetcher: unreachable leaves everything; an unchanged day fetches nothing; 
   const commits = [{ commit: { committer: { date: "2026-10-29T06:06:06Z" } } }];
   const posted = [];
   const post = async (url, init) => {
+    if (init.method === "GET") return new Response(JSON.stringify(INPUTS), { status: 200 });
     posted.push(JSON.parse(init.body).ops[0]);
     return new Response(JSON.stringify({ results: [{ ok: true, result: { matched: 0 } }] }), { status: 200 });
   };
@@ -294,6 +420,7 @@ test("fetcher: a day already sent is re-checked from the cache under a fresh op 
   const commits = [{ commit: { committer: { date: "2026-10-29T06:06:06Z" } } }];
   const posted = [];
   const post = async (url, init) => {
+    if (init.method === "GET") return new Response(JSON.stringify(INPUTS), { status: 200 });
     posted.push(JSON.parse(init.body).ops[0]);
     return new Response(JSON.stringify({ results: [{ ok: true, result: { matched: 0 } }] }), { status: 200 });
   };
@@ -321,7 +448,7 @@ test("fetcher: a day already sent is re-checked from the cache under a fresh op 
   // A re-check changes only what the worker finds new: the same rows again are no writes
   // and the day never goes back (older data is stale, equal data only adds new matches).
   const s = priceState();
-  const op = (day) => ({ type: "prices.sync", store: "dirk", day, rows: ROWS.dirk });
+  const op = (day) => raw(s, "dirk", day, ROWS.dirk);
   applyOp(s, op(DAY), ctx);
   assert.equal(applyOp(s, op(DAY), ctx).changed.length, 0);
   assert.deepEqual(applyOp(s, op("2026-10-01"), ctx).result, { stale: true });
@@ -334,6 +461,7 @@ test("fetcher: no cache yet fetches and caches the file; no cache and unreachabl
   const commits = [{ commit: { committer: { date: "2026-10-29T06:06:06Z" } } }];
   const posted = [];
   const post = async (url, init) => {
+    if (init.method === "GET") return new Response(JSON.stringify(INPUTS), { status: 200 });
     posted.push(JSON.parse(init.body).ops[0]);
     return new Response(JSON.stringify({ results: [{ ok: true, result: {} }] }), { status: 200 });
   };

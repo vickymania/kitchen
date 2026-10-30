@@ -14,8 +14,9 @@ import { applyOp, emptyState } from "../public/shared/ops.js";
 import { packSize, pricesOf, storePriceId } from "../public/shared/store-prices.js";
 import {
   unitPrice, packRatio, comparableTarget, comparableTargets, matchComparables, rowComparable, referenceProduct, comparablePriceId, PACK_TOLERANCE,
-  itemTargets, comparableReason,
+  itemTargets, comparableReason, storePriceResults,
 } from "../public/shared/comparable-prices.js";
+import { fetchInputs, inputsState } from "../fetcher/prices.mjs";
 import { linePrices, productPrices, lineQty, pickLinePrice, homeStore, listPrices, storeTotal, compareStores } from "../public/shared/line-prices.js";
 import { hiddenOf, rowHidden } from "../worker/privacy.js";
 
@@ -256,6 +257,9 @@ test("targets: the items he has a product of and the open list lines; the produc
 
 // ------------------------------------------------------------------ the op
 
+/** The op the home server sends for these raw Checkjebon rows: matched against the state first (fetcher/prices.mjs). */
+const raw = (s, store, day, rows) => ({ type: "prices.sync", store, day, rows: storePriceResults(s, rows, store) });
+
 function priceState() {
   const s = emptyState();
   Object.assign(s.items, { [EGGS.id]: EGGS, [MILK.id]: MILK, [ROLLS.id]: ROLLS, [SPROUTS.id]: SPROUTS, [PEPPER.id]: PEPPER });
@@ -266,7 +270,7 @@ function priceState() {
 
 test("op prices.sync: one comparable row per item and store, none where the store sells his product, none for excluded", () => {
   const s = priceState();
-  const r = applyOp(s, { type: "prices.sync", store: "Dirk", day: DAY, rows: DIRK }, ctx);
+  const r = applyOp(s, raw(s, "Dirk", DAY, DIRK), ctx);
   assert.equal(r.result.matched, 0);
   const rows = Object.values(s.store_prices);
   assert.deepEqual(rows.map((x) => [x.id, x.item_id, x.comparable, x.price_cents]).sort(), [
@@ -277,17 +281,17 @@ test("op prices.sync: one comparable row per item and store, none where the stor
   assert.equal(s.store_prices[comparablePriceId("Dirk", MILK.id)].product_id, AH_MILK.id, "compared with his product");
   assert.equal(r.result.comparable, 3);
   // The same day again writes nothing; his own product appearing at Dirk replaces the comparable.
-  assert.equal(applyOp(s, { type: "prices.sync", store: "Dirk", day: DAY, rows: DIRK }, ctx).changed.length, 0);
+  assert.equal(applyOp(s, raw(s, "Dirk", DAY, DIRK), ctx).changed.length, 0);
   const withOwn = [...DIRK, ["AH Scharrel eieren", "10 stuks", 249, ""]];
   const own = { ...AH_EGGS, id: "p-eggs-dirk", name: "Huis Scharrel eieren", brand: "Huis", store: "" };
   s.products[own.id] = own;
-  applyOp(s, { type: "prices.sync", store: "Dirk", day: "2026-10-30", rows: [...withOwn, ["Huis Scharrel eieren", "10 stuks", 245, ""]] }, ctx);
+  applyOp(s, raw(s, "Dirk", "2026-10-30", [...withOwn, ["Huis Scharrel eieren", "10 stuks", 245, ""]]), ctx);
   assert.equal(s.store_prices[storePriceId("Dirk", own.id)].price_cents, 245, "his own product's exact price");
   assert.ok(s.store_prices[comparablePriceId("Dirk", EGGS.id)].deleted_at, "the comparable goes: there is an exact price now");
   // pricesOf (the MCP server's exact prices) never shows a comparable row as his product.
   assert.deepEqual(pricesOf(s.store_prices, AH_MILK, TODAY), []);
   // Rows gone from the store: tombstones.
-  applyOp(s, { type: "prices.sync", store: "Dirk", day: "2026-10-31", rows: [["Dirk Appels", "1 kg", 199, ""]] }, ctx);
+  applyOp(s, raw(s, "Dirk", "2026-10-31", [["Dirk Appels", "1 kg", 199, ""]]), ctx);
   assert.ok(s.store_prices[comparablePriceId("Dirk", MILK.id)].deleted_at);
 });
 
@@ -295,11 +299,11 @@ test("op prices.sync: one comparable row per item and store, none where the stor
 
 function listView() {
   const s = priceState();
-  applyOp(s, { type: "prices.sync", store: "Dirk", day: DAY, rows: DIRK }, ctx);
-  applyOp(s, { type: "prices.sync", store: "Albert Heijn", day: DAY, rows: [
+  applyOp(s, raw(s, "Dirk", DAY, DIRK), ctx);
+  applyOp(s, raw(s, "Albert Heijn", DAY, [
     ["AH Scharrel eieren", "10 stuks", 279, "910001"], ["AH Houdbare halfvolle melk", "1 l", 115, "910002"], ["AH Schnittbroodjes", "6 stuks", 189, "910003"],
-  ] }, ctx);
-  applyOp(s, { type: "prices.sync", store: "Jumbo", day: DAY, rows: [["Jumbo Scharreleieren", "10 stuks", 229, ""], ["Jumbo Peper", "40 g", 89, ""]] }, ctx);
+  ]), ctx);
+  applyOp(s, raw(s, "Jumbo", DAY, [["Jumbo Scharreleieren", "10 stuks", 229, ""], ["Jumbo Peper", "40 g", 89, ""]]), ctx);
   const entry = (id, item, title, amounts = []) => ({ id, item_id: item.id, title, amounts, created_at: "x" });
   s.entries = {
     "e-eggs": entry("e-eggs", EGGS, "Eieren"),
@@ -409,7 +413,29 @@ test("privacy: a comparable row of a private item is hidden from the others, on 
     op({ type: "product.put", id: "product-pv2-peper1", product: { name: "Merk Peper", brand: "Merk", size: "35 g", store: "Albert Heijn", item_id: PEPPER.id } }),
     op({ type: "item.private", item_id: "item-pv2-zalf001", private: true }),
   ]);
-  await send({ bearer: importer }, [op({ type: "prices.sync", store: "Dirk", day: DAY, rows: [...DIRK, ["Huis Voetzalf", "75 ml", 459, ""]] })]);
+  // An item private to Sam: Thomas's importer never gets it in its inputs.
+  await send({ cookie: sam }, [
+    op({ type: "entry.add", id: "entry-pv2-sams01", item_id: "item-pv2-sams001", title: "Sams pillen" }),
+    op({ type: "product.put", id: "product-pv2-sams01", product: { name: "Merk Sams pillen", brand: "Merk", size: "20 stuks", store: "Albert Heijn", item_id: "item-pv2-sams001" } }),
+    op({ type: "item.private", item_id: "item-pv2-sams001", private: true }),
+  ]);
+  // The home server reads its inputs (as Thomas, who paired it) and matches there.
+  const fetchVia = (url, init) => worker.fetch(new Request(url, { ...init, headers: { ...init.headers, Origin: ORIGIN } }), env);
+  const inputs = await fetchInputs(ORIGIN, importer, fetchVia);
+  const ids = JSON.stringify(inputs);
+  assert.ok(ids.includes("item-pv2-zalf001"), "the importer's own member's private item is there");
+  assert.ok(!ids.includes("item-pv2-sams001") && !ids.includes("product-pv2-sams01") && !ids.includes("Sams pillen"), "another member's private item and product never");
+  assert.deepEqual(Object.keys(inputs).sort(), ["items", "list_items", "preferences", "products", "purchase_counts"]);
+  assert.ok(inputs.items.every((i) => Object.keys(i).every((k) => ["id", "name", "preferred_product_id", "created_at"].includes(k))), "only what matching reads");
+  const rows = storePriceResults(inputsState(inputs), [...DIRK, ["Huis Voetzalf", "75 ml", 459, ""], ["Huis Sams pillen", "20 stuks", 299, ""]], "Dirk");
+  await send({ bearer: importer }, [op({ type: "prices.sync", store: "Dirk", day: DAY, rows })]);
+  // A result naming Sam's private item is refused whole, as any op naming it.
+  const forged = await (await call(env, "POST", "/api/ops", { bearer: importer, body: { ops: [op({ type: "prices.sync", store: "Jumbo", day: DAY,
+    rows: [{ item_id: "item-pv2-sams001", comparable: 1, product_id: null, name: "Jumbo pillen", size: "20 stuks", price_cents: 199 }] })] } })).json();
+  assert.equal(forged.results[0].error, "not_found");
+  // Only the importer reads the inputs: not a person's phone, not unpaired.
+  assert.equal((await call(env, "GET", "/api/prices/inputs", { cookie: thomas })).status, 403);
+  assert.equal((await call(env, "GET", "/api/prices/inputs", {})).status, 401);
   const synced = async (cookie) => (await (await call(env, "GET", "/api/sync?since=0", { cookie })).json()).store_prices.map((r) => r.item_id).sort();
   assert.deepEqual(await synced(thomas), [PEPPER.id, "item-pv2-zalf001"].sort(), "the owner sees both");
   assert.deepEqual(await synced(sam), [PEPPER.id], "Sam never sees the private item's price");

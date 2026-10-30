@@ -3,13 +3,19 @@
 // GitHub for the day of the file's last commit; only when that day is newer
 // than the last one sent is the file (~10 MB) fetched, once, and the rows of
 // the near stores are kept in prices-cache.json.gz. On every other run the
-// cached rows are sent again with the same day, under a new op id, so a
-// product bought yesterday is matched at the very next run. Then one
-// prices.sync op per store (public/shared/store-prices.js PRICE_STORES) to
-// /api/ops as the importer device ("Thuisserver AH"): the worker keeps only the
-// prices of his own products. A store with fewer than MIN_STORE_ROWS rows is
-// skipped (its old prices stay and show their date); Checkjebon unreachable
-// leaves everything as it was.
+// cached rows are matched again with the same day, under a new op id, so a
+// product bought yesterday is matched at the very next run. The matching runs
+// HERE (31-10-2026: in the worker it exceeded the free plan's CPU limit): the
+// household's products, items, preferences, purchase counts and open list
+// come from GET /api/prices/inputs (importer only, private items of others
+// left out), storePriceResults (public/shared/comparable-prices.js) finds his
+// exact prices and the comparables, and one prices.sync op per store
+// (public/shared/store-prices.js PRICE_STORES) carries only those results to
+// /api/ops as the importer device ("Thuisserver AH"); the worker checks them
+// and writes the diff. A store with fewer than MIN_STORE_ROWS rows is
+// skipped (its old prices stay and show their date); Checkjebon or the
+// inputs unreachable leaves everything as it was. A dry run reads the inputs
+// too when there is a token (a GET, nothing written) and logs the counts.
 //
 //   node fetcher/prices.mjs dry-run   fetch and log counts per store, send nothing
 //   node fetcher/prices.mjs push      send the stores that changed
@@ -25,6 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { politeJson } from "./sources.mjs";
 import { CHECKJEBON_URL, CHECKJEBON_COMMITS, PRICE_STORES, MIN_STORE_ROWS, parseCheckjebon } from "../public/shared/store-prices.js";
+import { storePriceResults } from "../public/shared/comparable-prices.js";
 
 const HOME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const IMPORTER_TOKEN_FILE = path.join(HOME, "importer-token");
@@ -47,8 +54,26 @@ export function commitDay(commits) {
   return Number.isFinite(ms) ? new Date(ms).toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" }) : null;
 }
 
-/** One prices.sync op per store with enough rows; the op id makes a resend of one day a replay. A re-check passes `recheck` (the run's stamp) so its ids are new. */
-export function priceOps(perStore, day, recheck = "") {
+/**
+ * The answer of /api/prices/inputs as the state the matcher reads: rows by
+ * id, the open list as entries, the purchase counts as they came.
+ */
+export function inputsState(inputs) {
+  const byId = (list) => Object.fromEntries((Array.isArray(list) ? list : []).filter((r) => r?.id).map((r) => [r.id, r]));
+  const listItems = Array.isArray(inputs?.list_items) ? inputs.list_items : [];
+  return {
+    products: byId(inputs?.products), items: byId(inputs?.items), preferences: byId(inputs?.preferences),
+    entries: Object.fromEntries(listItems.map((id, i) => [`list-${i}`, { id: `list-${i}`, item_id: id }])),
+    purchase_counts: inputs?.purchase_counts && typeof inputs.purchase_counts === "object" ? inputs.purchase_counts : {},
+  };
+}
+
+/**
+ * One prices.sync op per store with enough rows, its rows the results of the
+ * matching against `state` (inputsState); the op id makes a resend of one day
+ * a replay. A re-check passes `recheck` (the run's stamp) so its ids are new.
+ */
+export function priceOps(perStore, day, state, recheck = "") {
   const ops = [];
   const skipped = {};
   for (const [slug, store] of Object.entries(PRICE_STORES)) {
@@ -57,9 +82,20 @@ export function priceOps(perStore, day, recheck = "") {
       skipped[slug] = rows.length;
       continue;
     }
-    ops.push({ op_id: `prices-${slug}-${day}${recheck ? `-r${recheck}` : ""}`, type: "prices.sync", store, day, rows });
+    ops.push({ op_id: `prices-${slug}-${day}${recheck ? `-r${recheck}` : ""}`, type: "prices.sync", store, day, rows: storePriceResults(state, rows, store) });
   }
   return { ops, skipped };
+}
+
+/** The household's inputs for the matching (GET /api/prices/inputs as the importer). */
+export async function fetchInputs(origin, token, send = fetch) {
+  const res = await send(`${origin}/api/prices/inputs`, {
+    method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`inputs: HTTP ${res.status}`);
+  const body = await res.json();
+  if (!Array.isArray(body?.products) || !Array.isArray(body?.items)) throw new Error("inputs: odd answer");
+  return body;
 }
 
 function readState() {
@@ -152,15 +188,34 @@ export async function runPrices(mode, { get = (url, label) => politeJson(url, { 
       recheck = runStamp(now);
     }
   }
-  const { ops, skipped } = priceOps(perStore, day, recheck);
-  say(`day ${day}; rows per store ${JSON.stringify(Object.fromEntries(Object.entries(perStore).map(([k, v]) => [k, v.length])))}; skipped ${JSON.stringify(skipped)}`);
+  const counts = JSON.stringify(Object.fromEntries(Object.entries(perStore).map(([k, v]) => [k, v.length])));
+  // The household's inputs: required to push; a dry run without a token or answer only counts rows.
+  let auth = token;
+  let inputs = null;
+  try {
+    auth ??= readImporterToken();
+    inputs = await fetchInputs(origin, auth, post);
+  } catch (e) {
+    if (mode === "push") {
+      say("inputs unreachable, nothing sent:", e.message);
+      throw new Error(`no inputs: ${e.message}`);
+    }
+    say("dry-run without inputs:", e.message);
+  }
+  if (!inputs) {
+    say(`day ${day}; rows per store ${counts}`);
+    say("dry-run: nothing sent");
+    return { day, sent: 0, skipped: {} };
+  }
+  const { ops, skipped } = priceOps(perStore, day, inputsState(inputs), recheck);
+  const found = Object.fromEntries(ops.map((o) => [o.store, `${o.rows.filter((r) => !r.comparable).length}+${o.rows.filter((r) => r.comparable).length}`]));
+  say(`day ${day}; rows per store ${counts}; matched exact+comparable ${JSON.stringify(found)}; skipped ${JSON.stringify(skipped)}`);
   if (mode !== "push") {
     say("dry-run: nothing sent");
     return { day, sent: 0, skipped };
   }
-  const auth = token ?? readImporterToken();
   let failed = 0;
-  // One store per request: a few thousand rows each, and one store failing leaves the others.
+  // One store per request: a few hundred results each, and one store failing leaves the others.
   for (const op of ops) {
     try {
       const res = await post(`${origin}/api/ops`, {

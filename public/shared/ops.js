@@ -15,7 +15,7 @@
 // lines), not strings.
 import { UNIT_CODES, nameKey, mergeAmounts } from "./ingredients.js";
 import { isExcluded } from "./excluded.js";
-import { canonicalStore } from "./stores.js";
+import { canonicalStore, sameStore } from "./stores.js";
 import { isStarValue } from "./recipe-ratings.js";
 import { fromEntry, matchPurchase, round2, entryPantryId, purchasePantryId, parseLowAt, LOW_AT_MAX, drainRows, rowRate, rateEventId, RATE_MAX, RATE_MIN, RATE_SOURCES, RATE_RANK, pendingFits, pendingNeed, pendingEventId, PENDING_MAX } from "./pantry.js";
 import { estimateUseBy, addDays, KEEPS, SHELF_DAYS_MAX, SHELF_SOURCES, SHELF_RANK, openedDaysOf, itemShelfDays, openedUseBy } from "./shelf-life.js";
@@ -26,8 +26,8 @@ import { aliasTarget, itemsNamed, findItem } from "./item-find.js";
 import { learnRate, onOffer, earlierPurchases } from "./rate-learning.js";
 import { LINK_HOWS, LINK_REASONS } from "./recipe-links.js";
 import { LANGS, NAME_EN_SOURCES, NAME_EN_RANK, recipeLang, detectLang, cleanTranslation } from "./bilingual.js";
-import { PRICE_STORE_NAMES, MAX_PRICE_WRITES, checkPriceRows, matchStorePrices, storePriceId } from "./store-prices.js";
-import { comparableTargets, matchComparables, comparablePriceId } from "./comparable-prices.js";
+import { PRICE_STORE_NAMES, MAX_PRICE_WRITES, checkPriceResults, storePriceId } from "./store-prices.js";
+import { comparablePriceId } from "./comparable-prices.js";
 
 export class OpError extends Error {
   constructor(code, detail = "") {
@@ -1978,54 +1978,89 @@ const HANDLERS = {
   },
 
   // One store's Checkjebon shelf prices (public/shared/store-prices.js), sent
-  // by the home server only (worker/api.js refuses it from anyone else). Of
-  // the thousands of rows only his products' prices are kept: one row per
-  // product and store, written when its price, name, size or day changed; a
-  // row whose product has no match any more gets a tombstone. Data older
-  // than what is stored changes nothing. The new and changed prices go
-  // first, then the newer days, at most MAX_PRICE_WRITES rows per op.
-  // Prices v2 (30-10-2026): an item he buys or has on the list whose
-  // products this store does not sell gets its comparable product here
-  // (public/shared/comparable-prices.js): one row per item and store,
-  // "spc-<store>-<item>", comparable = 1, item_id set (private items stay
-  // hidden by it); gone when the store gets an exact price or no match.
+  // by the home server only (worker/api.js refuses it from anyone else).
+  // Since 31-10-2026 the home server does the matching (fetcher/prices.mjs,
+  // storePriceResults in public/shared/comparable-prices.js) and sends only
+  // the results: the exact price of his products, and per item without one
+  // there its comparable product (Prices v2, 30-10-2026: one row per
+  // item and store, "spc-<store>-<item>", comparable = 1, item_id set so a
+  // private item's row stays hidden). Here only checks and the diff, O(rows):
+  // the worker never runs the matcher (it exceeded the free plan's CPU). A
+  // row of a product or item that is gone, merged or excluded, or a store
+  // brand of another store, is left out (counted in `refused`); a stored row
+  // without a result gets a tombstone. Data older than what is stored changes
+  // nothing. New and changed prices first, then the newer days, at most
+  // MAX_PRICE_WRITES rows per op.
   "prices.sync"(state, op, ctx) {
     const store = PRICE_STORE_NAMES.find((s) => s === canonicalStore(text(op.store, 40, "store")));
     if (!store) throw new OpError("bad_field", "store");
     const day = date(op.day, "day");
     let rows;
     try {
-      rows = checkPriceRows(op.rows);
+      rows = checkPriceResults(op.rows);
     } catch (e) {
       throw new OpError("bad_field", e.message);
     }
     const stored = Object.values(state.store_prices).filter((r) => r.store === store);
     if (stored.some((r) => !r.deleted_at && r.price_on > day)) return { stale: true };
-    const found = matchStorePrices(Object.values(state.products), state.items, rows, store);
+    const seen = new Map();
+    const liveItem = (id) => {
+      if (!seen.has(id)) {
+        const i = id ? state.items[id] : null;
+        seen.set(id, i && !i.deleted_at && !i.merged_into && !isExcluded(i.name ?? "") ? i : null);
+      }
+      return seen.get(id);
+    };
+    const liveProduct = (id) => {
+      const p = id ? state.products[id] : null;
+      if (!p || p.deleted_at || isExcluded(`${p.brand ?? ""} ${p.name ?? ""}`)) return null;
+      if (p.item_id && state.items[p.item_id] && !liveItem(p.item_id)) return null;
+      return p;
+    };
+    const found = new Map();
+    const comps = new Map();
+    let refused = 0;
+    for (const r of rows) {
+      if (isExcluded(r.name)) {
+        refused++;
+        continue;
+      }
+      if (!r.comparable) {
+        const p = liveProduct(r.product_id);
+        // A product sold at one store only never has a price at another.
+        if (!p || (p.store_only && p.store && !sameStore(p.store, store))) refused++;
+        else found.set(p.id, r);
+      } else if (!liveItem(r.item_id) || (r.product_id && !liveProduct(r.product_id))) refused++;
+      else comps.set(r.item_id, r);
+    }
+    // A comparable only where this store has no exact price of the item.
+    for (const id of found.keys()) {
+      const itemId = state.products[id]?.item_id;
+      if (itemId && comps.delete(itemId)) refused++;
+    }
     const writes = [];
     for (const [productId, m] of found) {
       const rid = storePriceId(store, productId);
       const old = state.store_prices[rid];
-      const same = old && !old.deleted_at && old.price_cents === m.cents && old.name === m.name && old.size === m.size;
+      const same = old && !old.deleted_at && old.price_cents === m.price_cents && old.name === m.name && old.size === m.size;
       if (same && old.price_on === day) continue;
       writes.push({ rank: same ? 2 : 0, on: same ? old.price_on : "", run: () => {
         const row = old ?? { id: rid, product_id: productId, store, created_at: ctx.now };
-        Object.assign(row, { name: m.name, size: m.size, price_cents: m.cents, price_on: day, comparable: 0, updated_at: ctx.now, deleted_at: null });
+        Object.assign(row, { name: m.name, size: m.size, price_cents: m.price_cents, price_on: day, comparable: 0, updated_at: ctx.now, deleted_at: null });
         state.store_prices[rid] = row;
         ctx.touch("store_prices", rid);
       } });
     }
-    // Comparables, only for items without an exact price at this store.
-    const exactItems = new Set([...found.keys()].map((id) => state.products[id]?.item_id).filter(Boolean));
-    const comps = matchComparables(comparableTargets(state).filter((t) => !exactItems.has(t.item_id)), rows);
     for (const [itemId, m] of comps) {
       const rid = comparablePriceId(store, itemId);
       const old = state.store_prices[rid];
-      const same = old && !old.deleted_at && old.price_cents === m.cents && old.name === m.name && old.size === m.size && old.product_id === m.product_id;
+      // store_prices.product_id is NOT NULL: a comparable of the item's name alone keeps "".
+      const pid = m.product_id ?? "";
+      const same = old && !old.deleted_at && old.price_cents === m.price_cents && old.name === m.name && old.size === m.size && old.product_id === pid;
       if (same && old.price_on === day) continue;
       writes.push({ rank: same ? 3 : 1, on: same ? old.price_on : "", run: () => {
         const row = old ?? { id: rid, item_id: itemId, store, created_at: ctx.now };
-        Object.assign(row, { item_id: itemId, product_id: m.product_id, name: m.name, size: m.size, price_cents: m.cents, price_on: day, comparable: 1, updated_at: ctx.now, deleted_at: null });
+        Object.assign(row, { item_id: itemId, product_id: pid, name: m.name, size: m.size, price_cents: m.price_cents, price_on: day, comparable: 1, updated_at: ctx.now, deleted_at: null });
         state.store_prices[rid] = row;
         ctx.touch("store_prices", rid);
       } });
@@ -2040,7 +2075,7 @@ const HANDLERS = {
     }
     writes.sort((a, b) => a.rank - b.rank || a.on.localeCompare(b.on));
     for (const w of writes.slice(0, MAX_PRICE_WRITES)) w.run();
-    return { matched: found.size, comparable: comps.size, written: Math.min(writes.length, MAX_PRICE_WRITES), left: Math.max(0, writes.length - MAX_PRICE_WRITES) };
+    return { matched: found.size, comparable: comps.size, refused, written: Math.min(writes.length, MAX_PRICE_WRITES), left: Math.max(0, writes.length - MAX_PRICE_WRITES) };
   },
 
   // The nightly check's report (fetcher/review.mjs, sent by the home

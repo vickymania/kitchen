@@ -7,6 +7,8 @@ import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pen
 import { addDays } from "../public/shared/shelf-life.js";
 import { OFFER_HISTORY } from "../public/shared/rate-learning.js";
 import { canonicalStore } from "../public/shared/stores.js";
+import { MAX_PRICE_RESULTS } from "../public/shared/store-prices.js";
+import { isExcluded } from "../public/shared/excluded.js";
 import { needsTranslation, recipeFingerprint } from "../public/shared/bilingual.js";
 import { hiddenStatement, hiddenOf, loadHidden, rowHidden, rowFor, guardOp, touchesHidden } from "./privacy.js";
 
@@ -168,6 +170,12 @@ async function loadIds(db, hh, s, kind, ids) {
     const chunk = list.slice(i, i + 90);
     await loadInto(db, hh, s, kind, `id IN (${chunk.map(() => "?").join(",")})`, ...chunk);
   }
+}
+
+/** Rows by id in one query, however many ids (json_each of one bound JSON array). */
+async function loadJsonIds(db, hh, s, kind, ids) {
+  if (!ids.length) return;
+  await loadInto(db, hh, s, kind, "id IN (SELECT value FROM json_each(?))", JSON.stringify(ids));
 }
 
 /**
@@ -650,24 +658,19 @@ async function load(db, hh, op, memberId) {
     case "member.update":
       await loadInto(db, hh, s, "members", "id = ?", String(op.id));
       break;
-    case "prices.sync":
-      // Every live product is a candidate (a few hundred), the live items for
-      // their names, and this store's price rows, tombstones too (a returning price revives its row).
-      await loadInto(db, hh, s, "products", "deleted_at IS NULL");
-      await loadInto(db, hh, s, "items", "deleted_at IS NULL");
-      // For the comparables (public/shared/comparable-prices.js): the open
-      // list lines (their items) and the preferences (the product to compare with).
-      await loadInto(db, hh, s, "entries", "deleted_at IS NULL AND checked_at IS NULL");
-      await loadInto(db, hh, s, "preferences", "deleted_at IS NULL");
-      // How often he bought each product: the most bought one is compared first (referenceProduct).
-      {
-        const { results } = await db.prepare(
-          "SELECT product_id, COUNT(*) AS n FROM purchases WHERE household_id = ? AND deleted_at IS NULL AND product_id IS NOT NULL GROUP BY product_id",
-        ).bind(hh).all();
-        s.purchase_counts = Object.fromEntries(results.map((r) => [r.product_id, Number(r.n)]));
-      }
+    case "prices.sync": {
+      // Precomputed results (fetcher/prices.mjs matches on the home server):
+      // only the products and items they name, the items of those products
+      // (gone, merged, excluded), and this store's price rows, tombstones
+      // too (a returning price revives its row). One query per kind with the
+      // ids as one JSON array: D1 counts queries per invocation.
+      const rows = Array.isArray(op.rows) ? op.rows.slice(0, MAX_PRICE_RESULTS) : [];
+      const idsOf = (f) => [...new Set(rows.map((r) => r?.[f]).filter((x) => typeof x === "string" && x.length <= 80))];
+      await loadJsonIds(db, hh, s, "products", idsOf("product_id"));
+      await loadJsonIds(db, hh, s, "items", [...new Set([...idsOf("item_id"), ...Object.values(s.products).map((p) => p.item_id).filter(Boolean)])]);
       await loadInto(db, hh, s, "store_prices", "store = ?", canonicalStore(String(op.store ?? "")));
       break;
+    }
     case "review.save":
       // The day's own row, tombstone too (a second run that day replaces it).
       await loadInto(db, hh, s, "reviews", "id = ?", `review-${String(op.day ?? "")}`);
@@ -682,6 +685,21 @@ async function load(db, hh, op, memberId) {
   return s;
 }
 
+const upserts = new Map();
+/** The upsert of one kind's row, built once (prices.sync writes up to 800 rows in one op). */
+function upsertSql(kind) {
+  if (!upserts.has(kind)) {
+    const cols = COLUMNS[kind];
+    const table = TABLE[kind];
+    const rev = "(SELECT rev FROM households WHERE id = ?)";
+    const updates = cols.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ");
+    // The WHERE keeps an id from one household from ever overwriting a row of another.
+    upserts.set(kind, `INSERT INTO ${table} (household_id, ${cols.join(", ")}, rev) VALUES (?, ${cols.map(() => "?").join(", ")}, ${rev}) `
+      + `ON CONFLICT(id) DO UPDATE SET ${updates}, rev = excluded.rev WHERE ${table}.household_id = excluded.household_id`);
+  }
+  return upserts.get(kind);
+}
+
 function writeStatements(db, hh, state, changed) {
   const stmts = [db.prepare("UPDATE households SET rev = rev + 1 WHERE id = ?").bind(hh)];
   const rev = "(SELECT rev FROM households WHERE id = ?)";
@@ -693,13 +711,7 @@ function writeStatements(db, hh, state, changed) {
       continue;
     }
     const cols = COLUMNS[kind];
-    const table = TABLE[kind];
-    const updates = cols.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ");
-    // The WHERE keeps an id from one household from ever overwriting a row of another.
-    stmts.push(db.prepare(
-      `INSERT INTO ${table} (household_id, ${cols.join(", ")}, rev) VALUES (?, ${cols.map(() => "?").join(", ")}, ${rev}) ` +
-      `ON CONFLICT(id) DO UPDATE SET ${updates}, rev = excluded.rev WHERE ${table}.household_id = excluded.household_id`,
-    ).bind(hh, ...cols.map((c) => toValue(kind, c, row[c])), hh));
+    stmts.push(db.prepare(upsertSql(kind)).bind(hh, ...cols.map((c) => toValue(kind, c, row[c])), hh));
   }
   return stmts;
 }
@@ -878,4 +890,38 @@ export async function pull(db, hh, since, { guest = false, memberId = null } = {
   // Which item each recipe line means is the household's (30-10-2026): never a guest's.
   if (guest) out.recipes = out.recipes.map(({ ingredient_links, ...r }) => r);
   return out;
+}
+
+/**
+ * What the home server needs to match one day of Checkjebon prices
+ * (fetcher/prices.mjs, GET /api/prices/inputs, the importer device only):
+ * the live products and items with only the fields matching reads, the
+ * any-store preferences (referenceProduct), how often each product was bought,
+ * and the items on the open list. As the importer's member sees them: items
+ * private to someone else, their products and everything about them are not
+ * there (worker/privacy.js); never an excluded thing. Five queries.
+ */
+export async function priceInputs(db, who) {
+  const hh = who.householdId;
+  const hidden = await loadHidden(db, hh, who.memberId);
+  const all = async (sql) => (await db.prepare(sql).bind(hh).all()).results;
+  const items = (await all("SELECT id, name, preferred_product_id, created_at FROM items WHERE household_id = ? AND deleted_at IS NULL AND merged_into IS NULL"))
+    .filter((i) => !rowHidden("items", i, hidden) && !isExcluded(i.name ?? ""));
+  const itemIds = new Set(items.map((i) => i.id));
+  const products = (await all(
+    "SELECT id, item_id, name, brand, size, store, store_only, category, kind, created_at, updated_at FROM products WHERE household_id = ? AND deleted_at IS NULL",
+  )).filter((p) => !rowHidden("products", p, hidden) && (!p.item_id || itemIds.has(p.item_id)) && !isExcluded(`${p.brand ?? ""} ${p.name ?? ""}`));
+  const productIds = new Set(products.map((p) => p.id));
+  for (const i of items) if (i.preferred_product_id && !productIds.has(i.preferred_product_id)) i.preferred_product_id = null;
+  // Only the any-store, any-recipe preference counts for a comparable (referenceProduct).
+  const preferences = (await all(
+    "SELECT id, item_id, store, recipe_id, product_id FROM preferences WHERE household_id = ? AND deleted_at IS NULL AND product_id IS NOT NULL AND (recipe_id IS NULL OR recipe_id = '')",
+  )).filter((p) => !canonicalStore(p.store ?? "") && itemIds.has(p.item_id) && productIds.has(p.product_id));
+  const counts = {};
+  for (const r of await all("SELECT product_id, COUNT(*) AS n FROM purchases WHERE household_id = ? AND deleted_at IS NULL AND product_id IS NOT NULL GROUP BY product_id")) {
+    if (productIds.has(r.product_id)) counts[r.product_id] = Number(r.n);
+  }
+  const listItems = (await all("SELECT DISTINCT item_id FROM list_entries WHERE household_id = ? AND deleted_at IS NULL AND checked_at IS NULL AND item_id IS NOT NULL"))
+    .map((r) => r.item_id).filter((id) => itemIds.has(id));
+  return { items, products, preferences, purchase_counts: counts, list_items: listItems };
 }

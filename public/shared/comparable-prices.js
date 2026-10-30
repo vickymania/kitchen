@@ -23,7 +23,7 @@
 import { isExcluded } from "./excluded.js";
 import { nameKey } from "./ingredients.js";
 import { canonicalStore } from "./stores.js";
-import { keyWords, packSize, noise, holds, sameWord, DEFAULT_WORDS } from "./store-prices.js";
+import { keyWords, packSize, noise, holds, sameWord, DEFAULT_WORDS, matchStorePrices } from "./store-prices.js";
 import { productKind, kindFromName, kindFits } from "./product-kinds.js";
 import { preferenceAt } from "./preferences.js";
 import { isGeneric } from "./item-names.js";
@@ -500,3 +500,29 @@ export function matchComparables(targets, rows) {
 
 /** The id of the row of one item's comparable product in one store. */
 export const comparablePriceId = (store, itemId) => `spc-${nameKey(canonicalStore(store)).replace(/ /g, "-")}-${itemId}`;
+
+/**
+ * Everything one store's Checkjebon rows ([name, size, cents, ref]) say about
+ * his products and items: the result rows of a prices.sync op (checked by
+ * checkPriceResults in public/shared/store-prices.js). The exact price of each
+ * product of his the store sells, and for an item without one there a
+ * comparable product. Runs on the home server (fetcher/prices.mjs) with the
+ * household's inputs (/api/prices/inputs), never in the worker: 17,000 rows
+ * against every product and item is far more CPU than the free plan allows.
+ * state: { products, items, preferences, entries, purchase_counts } by id.
+ */
+export function storePriceResults(state, rows, store) {
+  const found = matchStorePrices(Object.values(state.products ?? {}), state.items ?? {}, rows, store);
+  const out = [];
+  const exactItems = new Set();
+  for (const [productId, m] of found) {
+    out.push({ product_id: productId, name: m.name, size: m.size, price_cents: m.cents });
+    const itemId = state.products?.[productId]?.item_id;
+    if (itemId) exactItems.add(itemId);
+  }
+  const comps = matchComparables(comparableTargets(state).filter((t) => !exactItems.has(t.item_id)), rows);
+  for (const [itemId, m] of comps) {
+    out.push({ item_id: itemId, comparable: 1, product_id: m.product_id || null, name: m.name, size: m.size, price_cents: m.cents });
+  }
+  return out;
+}

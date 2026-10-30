@@ -1,9 +1,11 @@
 // Shelf prices of other stores (30-10-2026: "go"), from Checkjebon
 // (github.com/supermarkt/checkjebon, MIT; its data may be reused). The home
-// server fetches data/supermarkets.json once a day (fetcher/prices.mjs) and
-// sends one `prices.sync` op per store; the op engine keeps only the prices
-// of HIS products (matchStorePrices), one row per product and store in
-// `store_prices`. The phones show them on a list line, the product screen
+// server fetches data/supermarkets.json once a day (fetcher/prices.mjs),
+// finds the prices of HIS products there (matchStorePrices, with the
+// household's inputs from /api/prices/inputs) and sends one `prices.sync`
+// op per store with only those results; the op engine writes one row per
+// product and store in `store_prices`. Since 31-10-2026 the matching runs on
+// the home server, never in the worker (the free plan's CPU limit). The phones show them on a list line, the product screen
 // and "Laatst gekocht": "AH €2,19 · Dirk €1,89 · Jumbo €2,05".
 //
 // The file (seen 30-10-2026, ~10 MB): [{ n: "ah", c: "AH", u, i, d: [{ n: name,
@@ -82,6 +84,52 @@ export function checkPriceRows(rows) {
     if (!Number.isInteger(cents) || cents <= 0 || cents >= 100_000) throw new Error("row.cents");
     if (ref !== undefined && ref !== null && ref !== "" && (typeof ref !== "string" || !/^\d{1,12}$/.test(ref))) throw new Error("row.ref");
     return [name.trim(), size ?? "", cents, ref ?? ""];
+  });
+}
+
+/**
+ * At most this many result rows in one prices.sync (31-10-2026: the home
+ * server matches, the worker only writes): one per product of his with an
+ * exact price and one per item with a comparable, a few hundred in practice.
+ */
+export const MAX_PRICE_RESULTS = 5000;
+
+/**
+ * The result rows of a prices.sync op, checked; throws a plain Error on a bad
+ * one. An exact row: { product_id, name, size, price_cents }. A comparable
+ * row: { item_id, comparable: 1, product_id (his product it was compared
+ * with, or null), name, size, price_cents }. One row per product and per item.
+ * Shape only, no matching: a plain loop, cheap for the worker's CPU limit.
+ */
+export function checkPriceResults(rows) {
+  if (!Array.isArray(rows) || rows.length > MAX_PRICE_RESULTS) throw new Error("rows");
+  const id = (v, f) => {
+    if (typeof v !== "string" || !v || v.length > 80) throw new Error(f);
+    return v;
+  };
+  const products = new Set();
+  const items = new Set();
+  return rows.map((r) => {
+    if (!r || typeof r !== "object" || Array.isArray(r)) throw new Error("row");
+    const { name, size, price_cents: cents } = r;
+    if (typeof name !== "string" || !name.trim() || name.length > 160) throw new Error("row.name");
+    if (size !== undefined && size !== null && (typeof size !== "string" || size.length > 40)) throw new Error("row.size");
+    if (!Number.isInteger(cents) || cents <= 0 || cents >= 100_000) throw new Error("row.price_cents");
+    const comparable = r.comparable === 1 || r.comparable === true;
+    if (!comparable && r.comparable !== undefined && r.comparable !== 0 && r.comparable !== false) throw new Error("row.comparable");
+    const out = { comparable: comparable ? 1 : 0, name: name.trim(), size: size ?? "", price_cents: cents };
+    if (comparable) {
+      out.item_id = id(r.item_id, "row.item_id");
+      out.product_id = r.product_id === undefined || r.product_id === null || r.product_id === "" ? null : id(r.product_id, "row.product_id");
+      if (items.has(out.item_id)) throw new Error("row.item_id");
+      items.add(out.item_id);
+    } else {
+      if (r.item_id !== undefined && r.item_id !== null) throw new Error("row.item_id");
+      out.product_id = id(r.product_id, "row.product_id");
+      if (products.has(out.product_id)) throw new Error("row.product_id");
+      products.add(out.product_id);
+    }
+    return out;
   });
 }
 

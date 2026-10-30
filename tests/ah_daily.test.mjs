@@ -108,10 +108,13 @@ test("importer: every route but /api/ops is refused, and a normal device is unaf
   const routes = [...api.matchAll(/\["(GET|POST)", "(\/api\/[^"]+)", \w+(?:, (\{[^}]*\}))?\]/g)].map((m) => [m[1], m[2], m[3] ?? ""]);
   assert.ok(routes.length >= 15, "the route table was read");
   for (const [method, route, opts] of routes) {
-    if (route === "/api/ops" || opts.includes("open: true")) continue;
+    // /api/prices/inputs: the importer's own read for the shelf prices (tests/store-prices.test.mjs).
+    if (route === "/api/ops" || route === "/api/prices/inputs" || opts.includes("open: true")) continue;
     const res = await call(env, method, method === "GET" ? `${route}?since=0` : route, { bearer: importer, body: method === "POST" ? {} : undefined });
     assert.equal(res.status, 403, `the importer may not ${method} ${route}`);
   }
+  assert.equal((await call(env, "GET", "/api/prices/inputs", { bearer: importer })).status, 200);
+  assert.equal((await call(env, "GET", "/api/prices/inputs", { cookie: thomas })).status, 403, "a person's phone never");
   // A person's device: everything it could do before.
   const add = await call(env, "POST", "/api/ops", { cookie: thomas, body: { ops: [{ op_id: opId(), type: "entry.add", id: "entry-ahdaily-2", item_id: "item-ahdaily-2", title: "Melk" }] } });
   assert.equal(add.status, 200);

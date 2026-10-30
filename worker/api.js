@@ -4,7 +4,7 @@ import {
   authenticate, sameOrigin, pair, createCode, createHandoff, createInvite, listInvites, revokeInvite, sessionCookie, clearCookie, importerMayApply, IMPORTER_ONLY_OPS,
   reviewerMayApply, REVIEWER_ONLY_OPS, guestMayApply, GUEST_OWN_OPS,
 } from "./auth.js";
-import { applyOps, pull } from "./ops-store.js";
+import { applyOps, pull, priceInputs } from "./ops-store.js";
 import { uploadPhoto } from "./photos.js";
 import { readReceipt } from "./receipts.js";
 import { labelRecipe } from "./labels.js";
@@ -53,6 +53,8 @@ const ROUTES = [
   ["POST", "/api/recipes/import/url", recipeImportUrl, { guest: true }],
   ["POST", "/api/items/shelf-fill", itemsShelfFill],
   ["POST", "/api/offers/sync", offersSync, { only: "fetcher" }],
+  // What the home server matches Checkjebon's prices against (fetcher/prices.mjs): the importer only, never open.
+  ["GET", "/api/prices/inputs", pricesInputs, { only: "importer" }],
 ];
 
 const MAX_OPS = 100;
@@ -345,6 +347,10 @@ async function reviewerDecided(env, who, list) {
     }
   }
   return null;
+}
+
+async function pricesInputs({ env, who }) {
+  return json(await priceInputs(env.DB, who));
 }
 
 async function ops({ env, who, body, ctx }) {
