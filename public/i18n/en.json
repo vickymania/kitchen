@@ -743,7 +743,7 @@
     "cuisine": {
       "dutch": "Dutch", "italian": "Italian", "french": "French", "spanish": "Spanish", "greek": "Greek",
       "middle_eastern": "Middle Eastern", "indian": "Indian", "thai": "Thai", "chinese": "Chinese",
-      "japanese": "Japanese", "indonesian": "Indonesian", "mexican": "Mexican", "american": "American", "other": "Other"
+      "japanese": "Japanese", "korean": "Korean", "indonesian": "Indonesian", "mexican": "Mexican", "american": "American", "other": "Other"
     },
     "main": {
       "chicken": "Chicken", "beef": "Beef", "mince": "Mince", "pork": "Pork", "fish": "Fish", "seafood": "Seafood",

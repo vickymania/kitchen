@@ -743,7 +743,7 @@
     "cuisine": {
       "dutch": "Hollands", "italian": "Italiaans", "french": "Frans", "spanish": "Spaans", "greek": "Grieks",
       "middle_eastern": "Midden-Oosten", "indian": "Indiaas", "thai": "Thais", "chinese": "Chinees",
-      "japanese": "Japans", "indonesian": "Indonesisch", "mexican": "Mexicaans", "american": "Amerikaans", "other": "Anders"
+      "japanese": "Japans", "korean": "Koreaans", "indonesian": "Indonesisch", "mexican": "Mexicaans", "american": "Amerikaans", "other": "Anders"
     },
     "main": {
       "chicken": "Kip", "beef": "Rund", "mince": "Gehakt", "pork": "Varken", "fish": "Vis", "seafood": "Schaal- en schelpdieren",

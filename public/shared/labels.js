@@ -5,7 +5,7 @@
 
 export const CUISINES = [
   "dutch", "italian", "french", "spanish", "greek", "middle_eastern", "indian",
-  "thai", "chinese", "japanese", "indonesian", "mexican", "american", "other",
+  "thai", "chinese", "japanese", "korean", "indonesian", "mexican", "american", "other",
 ];
 
 export const MAIN_INGREDIENTS = [
