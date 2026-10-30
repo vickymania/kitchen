@@ -285,3 +285,79 @@ test("the audit: every line, its item, the list and the pantry, and what is stil
   assert.match(text, /2 ingredient lines|ingredient lines: \d+ find an item, 2 do not/);
   assert.match(text, /wit patentbloem -> Bloem \(compound\)/);
 });
+
+// English recipes keep their language; only the matching translates (30-10-2026).
+const DAKGANGJEONG = [
+  ["900 g boneless chicken thigh fillets ((2 pounds), cut into bite size pieces)", "Kipdijfilet"],
+  ["2 Tbsp fish sauce", null],
+  ["1 tsp onion powder", "Uienpoeder"],
+  ["1 tsp garlic powder", "Knoflookpoeder"],
+  ["1 tsp fine sea salt", "Zout"],
+  ["1/4 tsp ginger powder", "Gember gemalen"],
+  ["1.5 cups corn starch", "Maizena"],
+  ["cooking oil (for deep frying (I used rice bran oil))", null],
+  ["1/4 cups soy sauce", "Sojasaus"],
+  ["2 Tbsp brown sugar", "Basterdsuiker"],
+  ["2 Tbsp honey", "Honing"],
+  ["2 Tbsp water", null],
+  ["1/2 Tbsp minced ginger", "Gember"],
+  ["1/2 Tbsp minced garlic", "Knoflook"],
+  ["3 dried chilies ((optional))", "Chilivlokken"],
+  ["2 green onions ((optional), white part)", "Bosui"],
+  ["2 tsp corn starch", "Maizena"],
+  ["toasted sesame seeds", "Sesamzaad"],
+  ["green onions (, thinly sliced)", "Bosui"],
+];
+const EN_HOUSE = {
+  items: itemsOf(["Kipdijfilet", "Uienpoeder", "Knoflookpoeder", "Zout", "Gember gemalen", "Gember", "Maizena", "Sojasaus",
+    "Basterdsuiker", "Honing", "Knoflook", "Chilivlokken", "Bosui", "Sesamzaad", "Zonnebloemolie", "Kipfilet"]),
+  aliases: {},
+};
+
+test("English parsing: units, nested brackets, optional, preparation", () => {
+  const r = p("900 g boneless chicken thigh fillets ((2 pounds), cut into bite size pieces)");
+  assert.deepEqual([r.qty, r.unit, r.name], [900, "g", "chicken thigh fillets"]);
+  assert.equal(r.note, "boneless; 2 pounds, cut into bite size pieces");
+  const o = p("2 green onions ((optional), white part)");
+  assert.deepEqual([o.optional, o.name, o.note], [true, "green onions", "white part"]);
+  assert.equal(p("3 dried chilies ((optional))").optional, true);
+  assert.equal(p("3 dried chilies ((optional))").note, "");
+  assert.deepEqual([p("1.5 cups corn starch").qty, p("1.5 cups corn starch").unit], [1.5, "cup"]);
+  assert.equal(p("2 Tbsp honey").unit, "tbsp");
+  assert.equal(p("1 tbs honey").unit, "tbsp");
+  assert.deepEqual([p("12 strips bacon").qty, p("12 strips bacon").unit, p("12 strips bacon").name], [12, "strip", "bacon"]);
+  assert.deepEqual([p("2 lb potatoes").unit, p("2 lb potatoes").qty], ["g", 905]);
+  assert.deepEqual([p("8 oz cheese").unit, p("8 oz cheese").qty], ["g", 225]);
+  assert.equal(p("2 cups of flour").name, "flour");
+  const m = p("1/2 Tbsp minced ginger");
+  assert.deepEqual([m.name, m.note], ["ginger", "minced"]);
+  assert.deepEqual([p("toasted sesame seeds").name, p("toasted sesame seeds").note], ["sesame seeds", "toasted"]);
+  assert.deepEqual([p("green onions (, thinly sliced)").name, p("green onions (, thinly sliced)").note], ["green onions", "thinly sliced"]);
+  assert.equal(p("cooking oil (for deep frying (I used rice bran oil))").name, "cooking oil");
+  // Dutch stays Dutch.
+  assert.deepEqual([p("200 g spekblokjes, uitgebakken").name, p("200 g spekblokjes, uitgebakken").note], ["spekblokjes", "uitgebakken"]);
+  assert.equal(p("kippenbouillon (Maggi)").note, "Maggi");
+  assert.equal(p("2 el van de saus").name, "van de saus");
+});
+
+test("an English recipe finds the Dutch household's items through the lexicon", () => {
+  let linked = 0;
+  for (const [line, want] of DAKGANGJEONG) {
+    const got = named(EN_HOUSE, p(line).name);
+    assert.equal(got, want, line);
+    if (got) linked += 1;
+  }
+  assert.equal(linked, 16);
+  // Exact and Dutch steps come first; the lexicon is the last step.
+  assert.equal(resolveIngredient("zout", EN_HOUSE).how, "exact");
+  assert.equal(resolveIngredient("soy sauce", EN_HOUSE).how, "english");
+  // A generic oil stays unresolved unless the household has "Olie"; no typo guessing.
+  const withOil = { items: itemsOf(["Olie"]), aliases: {} };
+  assert.equal(named(withOil, "cooking oil"), "Olie");
+  assert.equal(named(withOil, "soi sauce"), null);
+  assert.equal(named(EN_HOUSE, "chicken breast"), "Kipfilet");
+  assert.equal(named(EN_HOUSE, "fish sauce"), null);
+  assert.equal(named(EN_HOUSE, "ginger powder"), "Gember gemalen");
+  // Without "Gember gemalen" the powder falls back to Gember (gemalen is a free word).
+  assert.equal(named({ items: itemsOf(["Gember"]), aliases: {} }, "ground ginger"), "Gember");
+});

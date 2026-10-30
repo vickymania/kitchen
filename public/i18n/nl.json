@@ -768,6 +768,7 @@
     "slice": { "one": "plak", "other": "plakken" },
     "piece": { "one": "stuk", "other": "stuks" },
     "cup": { "one": "kopje", "other": "kopjes" },
+    "strip": { "one": "reep", "other": "repen" },
     "sheet": { "one": "vel", "other": "vellen" },
     "jar": { "one": "pot", "other": "potten" },
     "bottle": { "one": "fles", "other": "flessen" },

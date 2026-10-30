@@ -93,6 +93,10 @@
         <item quantity="one">kopje</item>
         <item quantity="other">kopjes</item>
     </plurals>
+    <plurals name="unit_strip">
+        <item quantity="one">reep</item>
+        <item quantity="other">repen</item>
+    </plurals>
     <plurals name="unit_sheet">
         <item quantity="one">vel</item>
         <item quantity="other">vellen</item>

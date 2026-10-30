@@ -768,6 +768,7 @@
     "slice": { "one": "slice", "other": "slices" },
     "piece": { "one": "piece", "other": "pieces" },
     "cup": { "one": "cup", "other": "cups" },
+    "strip": { "one": "strip", "other": "strips" },
     "sheet": { "one": "sheet", "other": "sheets" },
     "jar": { "one": "jar", "other": "jars" },
     "bottle": { "one": "bottle", "other": "bottles" },

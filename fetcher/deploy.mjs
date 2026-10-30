@@ -52,6 +52,7 @@ const FILES = [
   ["public/shared/item-names.js", "public/shared/item-names.js"],
   ["public/shared/item-find.js", "public/shared/item-find.js"],
   ["public/shared/ingredient-match.js", "public/shared/ingredient-match.js"],
+  ["public/shared/ingredient-lexicon.js", "public/shared/ingredient-lexicon.js"],
   ["public/shared/stores.js", "public/shared/stores.js"],
   ["public/shared/ops.js", "public/shared/ops.js"],
   ["public/shared/pantry.js", "public/shared/pantry.js"],

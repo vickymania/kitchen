@@ -14,9 +14,9 @@ const UNIT_WORDS = {
   cl: ["cl"],
   dl: ["dl", "deciliter"],
   l: ["l", "liter", "litre", "liters"],
-  tbsp: ["el", "eetl", "eetlepel", "eetlepels", "eetlepeltje", "eetlepeltjes", "tbsp", "tablespoon", "tablespoons", "tbs"],
+  tbsp: ["el", "eetl", "eetlepel", "eetlepels", "eetlepeltje", "eetlepeltjes", "tbsp", "tbsps", "tablespoon", "tablespoons", "tbs"],
   tsp: ["tl", "theel", "thl", "theelepel", "theelepels", "theelepeltje", "theelepeltjes", "teelepel", "teelepels",
-    "tsp", "teaspoon", "teaspoons"],
+    "tsp", "tsps", "teaspoon", "teaspoons"],
   cm: ["cm", "centimeter"],
   clove: ["teen", "tenen", "teentje", "teentjes", "clove", "cloves"],
   can: ["blik", "blikken", "blikje", "blikjes", "can", "cans", "tin", "tins"],
@@ -31,11 +31,15 @@ const UNIT_WORDS = {
   slice: ["plak", "plakken", "plakje", "plakjes", "slice", "slices"],
   piece: ["stuk", "stuks", "stukje", "stukjes", "piece", "pieces", "pcs"],
   cup: ["kop", "kopje", "kopjes", "koppen", "cup", "cups"],
+  strip: ["strip", "strips"],
   sheet: ["vel", "vellen", "velletje", "sheet", "sheets"],
   jar: ["pot", "potje", "potjes", "potten", "jar", "jars"],
   bottle: ["fles", "flesje", "flessen", "bottle", "bottles"],
   bowl: ["bakje", "bakjes", "tray", "punnet"],
 };
+
+// Imperial weights are stored as grams (no unit code of their own): [word, grams].
+const IMPERIAL = new Map([["lb", 453.6], ["lbs", 453.6], ["pound", 453.6], ["pounds", 453.6], ["oz", 28.35], ["ounce", 28.35], ["ounces", 28.35]]);
 
 const WORD_TO_UNIT = new Map();
 for (const [code, words] of Object.entries(UNIT_WORDS)) for (const w of words) WORD_TO_UNIT.set(w, code);
@@ -68,13 +72,18 @@ function readNumber(text) {
 // ("verkruimeld"), a temperature ("lauwwarm", "op kamertemperatuur"), a cut
 // ("in blokjes"). "gehakt" alone is mince, never a note.
 const PARTICIPLE = String.raw`(?:[a-z]{0,8}ge[a-z]{2,}[dt]|[a-z]{0,8}ge(?:smolten|bakken|sneden|braden)|ver(?:kruimeld|brokkeld|warmd|deeld|snipperd))`;
-const PREP_WORD = String.raw`(?:${PARTICIPLE}|lauw(?:warm)?|(?:op )?kamertemperatuur|in (?:blokjes|plakjes|stukjes|reepjes|ringen|partjes|de lengte .+))`;
+const EN_ADV = String.raw`(?:thinly|finely|roughly|coarsely|freshly)`;
+const EN_PREP = String.raw`(?:minced|chopped|sliced|diced|grated|peeled|toasted|melted|softened|cubed)`;
+const PREP_WORD = String.raw`(?:${PARTICIPLE}|lauw(?:warm)?|(?:op )?kamertemperatuur|in (?:blokjes|plakjes|stukjes|reepjes|ringen|partjes|de lengte .+)|(?:${EN_ADV}\s+)?${EN_PREP}|cut into .+)`;
+// English preparation in front of the name: "minced garlic", "toasted sesame seeds", "boneless skinless chicken".
+const EN_LEADING_WORD = String.raw`(?:${EN_ADV}\s+)?(?:${EN_PREP.slice(3, -1)}|boneless|skinless)`;
+const PREP_LEADING = new RegExp(String.raw`^(${EN_LEADING_WORD}(?:(?:\s*,\s*|\s+and\s+|\s+)${EN_LEADING_WORD})*)\s+(.+)$`, "i");
 
 const PREP_AFTER_COMMA = new RegExp(String.raw`^([^,]+),\s*(` + [
   String.raw`${PARTICIPLE}\b.*`, String.raw`lauw(?:warm)?\b.*`, String.raw`(?:op )?kamertemperatuur\b.*`, "warm", "koud", "zacht", "ontdooid",
   "in .+", "zonder .+", "met .+", "zaden .+", "op gevoel", "naar smaak", "naar keuze", "bij voorkeur .+", "plus extra .+",
   "scheut(je)?", "om .+", "uitgeperst", "eetrijp", "(?:goed )?rijp", "voor .+", "finely .+", "chopped", "diced", "sliced", "grated", "drained", "to taste",
-  "melted", "softened", "beaten", "lukewarm", "crumbled", "minced", "peeled", "(?:at )?room temperature",
+  "thinly .+", "roughly .+", "coarsely .+", "cut .+", "cubed", "halved", "toasted", "shredded", "melted", "softened", "beaten", "lukewarm", "crumbled", "minced", "peeled", "(?:at )?room temperature",
 ].join("|") + ")$", "i");
 
 // The same at the end of a name without a comma: "ei losgeklopt", "ui gesnipperd".
@@ -96,6 +105,11 @@ export function splitPrep(text) {
     name = comma[1];
     notes.push(comma[2].trim());
   }
+  const leading = name.trim().match(PREP_LEADING);
+  if (leading) {
+    name = leading[2];
+    notes.unshift(leading[1].trim());
+  }
   const trailing = name.trim().match(PREP_TRAILING);
   if (trailing && !isMince(trailing[2])) {
     name = trailing[1];
@@ -106,6 +120,29 @@ export function splitPrep(text) {
 
 /** "optioneel: maïzena", "(Geraspte kaas)" and friends are optional. */
 const OPTIONAL_RE = /^(?:optioneel|optional|evt\.?|eventueel)\s*[:\-]?\s*/i;
+
+/** Top-level bracket groups taken out of a text (nesting kept inside): { text, groups }. An unclosed bracket stays. */
+function takeBrackets(text) {
+  let out = "";
+  const groups = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "(") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === ")" && depth > 0) {
+      depth--;
+      if (depth === 0) {
+        groups.push(text.slice(start + 1, i));
+        out += " ";
+      }
+    } else if (depth === 0) out += c;
+  }
+  if (depth > 0) out += text.slice(start);
+  return { text: out, groups };
+}
 
 /**
  * Parse one ingredient line into
@@ -150,13 +187,31 @@ export function parseIngredient(line) {
   }
   // "snufje komijn" has a unit without a number: it means one.
   if (unit && qty === null) qty = 1;
+  // Pounds and ounces are grams.
+  if (!unit && qty !== null) {
+    const w = rest.match(/^([a-zA-Z]+)\.?(?:\s+|$)/);
+    const grams = w && IMPERIAL.get(w[1].toLowerCase());
+    if (grams) {
+      unit = "g";
+      qty = roundQty(qty * grams);
+      if (qtyMax !== null) qtyMax = roundQty(qtyMax * grams);
+      rest = rest.slice(w[0].length);
+    }
+  }
+  // "2 cups of flour", "2 el van de saus": the filler word is not part of the name.
+  if (unit) rest = rest.replace(/^(?:of|van)\s+(?!de\s|het\s)/i, "");
 
-  // Text in brackets is a note: "kippenbouillon (Maggi)", "blik tomaten (400 gram)".
+  // Text in brackets is a note: "kippenbouillon (Maggi)", "blik tomaten (400 gram)",
+  // nested too: "((2 pounds), cut into pieces)"; "(optional)" makes the line optional.
   const notes = [];
-  let name = rest.replace(/\(([^)]*)\)/g, (_, inner) => {
-    if (inner.trim()) notes.push(inner.trim());
-    return " ";
-  });
+  const bracketed = takeBrackets(rest);
+  for (const group of bracketed.groups) {
+    let inner = group.replace(/\(\s*(?:optional|optioneel)\s*\)/gi, () => { optional = true; return ""; });
+    if (/^\s*(?:optional|optioneel)\s*$/i.test(inner)) { optional = true; inner = ""; }
+    inner = inner.replace(/^\s*\(([^()]*)\)/, "$1").replace(/^[\s,;]+|[\s,;]+$/g, "");
+    if (inner) notes.push(inner);
+  }
+  let name = bracketed.text;
   // How to prepare it is a note, not part of the name: "uien, gepeld",
   // "knoflook, uitgeperst", "melk, lauwwarm", "ui gesnipperd".
   const prep = splitPrep(name);

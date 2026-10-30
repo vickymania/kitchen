@@ -93,6 +93,10 @@
         <item quantity="one">cup</item>
         <item quantity="other">cups</item>
     </plurals>
+    <plurals name="unit_strip">
+        <item quantity="one">strip</item>
+        <item quantity="other">strips</item>
+    </plurals>
     <plurals name="unit_sheet">
         <item quantity="one">sheet</item>
         <item quantity="other">sheets</item>

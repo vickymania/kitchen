@@ -17,6 +17,9 @@
 //              "runder-" and "varkensgehakt" are gehakt, "patentbloem" is bloem)
 //   general    without a fat word (MODIFIERS: "volle melk" is "melk" when the
 //              household has no "Volle melk")
+//   english    last of all, an English kitchen word through the small lexicon
+//              (ingredient-lexicon.js: "corn starch" is "maizena"); every Dutch
+//              translation runs through the same steps above
 // Never a typo-fuzzy match, never a word added ("melk" never becomes "Volle
 // melk"), never a colour dropped ("rode ui" is not Uien, "rode peper" is no
 // pepper). A name the household does not know resolves to null.
@@ -28,13 +31,14 @@
 import { nameKey, splitPrep } from "./ingredients.js";
 import { canonicalName, GENERIC } from "./item-names.js";
 import { findItem } from "./item-find.js";
+import { dutchNames } from "./ingredient-lexicon.js";
 
 /** Words that never change which product is meant. "witte" is a colour (witte bonen) and stays; "wit" is flour or bread. */
 export const FREE = new Set([
   "wit", "gemalen", "instant", "vers", "verse", "groot", "grote", "klein", "kleine", "middelgrote", "flinke",
   "biologisch", "biologische", "bio", "fijne", "grove", "extra", "vierge", "gedroogd", "gedroogde",
   "ongezouten", "zacht", "zachte", "koud", "koude", "warm", "warme", "lauwwarm", "lauwwarme", "hele", "heel",
-  "rijpe", "rijp", "losse", "fresh", "ground", "large", "small", "medium",
+  "rijpe", "rijp", "losse", "fresh", "fine", "coarse", "ground", "large", "small", "medium",
 ]);
 
 /** Words that do change the product, dropped only when the household has nothing more specific. */
@@ -157,6 +161,16 @@ export function matchKeys(name) {
       withNumber(general, "general");
       const v = varietyOf(general);
       if (v) withNumber(v, "compound");
+    }
+  }
+  // Last: the English kitchen words as their Dutch names, after every Dutch step of every alternative.
+  for (const alt of alternatives) {
+    const plain = dropWords(alt, FREE);
+    const english = dutchNames(alt);
+    for (const dutch of english.length ? english : plain && plain !== alt ? dutchNames(plain) : []) {
+      withNumber(dutch, "english");
+      const dutchPlain = dropWords(dutch, FREE);
+      if (dutchPlain && dutchPlain !== dutch) withNumber(dutchPlain, "english");
     }
   }
   return out;
