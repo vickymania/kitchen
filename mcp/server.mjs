@@ -35,7 +35,7 @@ import { addDays } from "../public/shared/shelf-life.js";
 /** kitchen_recent_purchases: candidate items per purchase, and the output size (Claude cannot read more). */
 const CANDIDATES_MAX = 15;
 const RECENT_CHARS_MAX = 14_000;
-import { starsByRecipe } from "../public/shared/recipe-ratings.js";
+import { starsByRecipe, STARS_NEUTRAL, STARS_MAX } from "../public/shared/recipe-ratings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -187,11 +187,11 @@ function entryLine(e, members) {
   return `- ${parts.join(" — ")}  [id: ${e.id}]`;
 }
 
-/** "4.5/5 from 2 (Thomas 5, Sam 4)", or null without stars. */
+/** "9/10 from 2 (Thomas 10, Sam 8)", or null without stars. */
 function starsLine(stars, members) {
   if (!stars) return null;
   const who = Object.entries(stars.byMember).map(([m, n]) => `${members[m] ?? "?"} ${n}`).join(", ");
-  return `${stars.average}/5 from ${stars.count} (${who})`;
+  return `${stars.average}/10 from ${stars.count} (${who})`;
 }
 
 function recipeSummary(r, stars = null, members = {}) {
@@ -413,15 +413,15 @@ const TOOLS = [
   },
   {
     name: "kitchen_recipes_search",
-    description: "Search the recipe book by title or ingredient. Without a query: every recipe. Ideas (only a title) are marked. Each recipe shows the household's stars (1-5, average and per person); the best rated come first and low-rated ones (under 3) last, so suggest from the top.",
+    description: "Search the recipe book by title or ingredient. Without a query: every recipe. Ideas (only a title) are marked. Each recipe shows the household's stars (1-10, average and per person); the best rated come first and low-rated ones (under 6) last, so suggest from the top.",
     inputSchema: { type: "object", properties: { query: { type: "string" } } },
     async run({ query = "" }) {
       const s = await state();
       const q = nameKey(query);
       const hits = s.recipes
         .filter((r) => !q || nameKey(r.title).includes(q) || r.ingredients.some((i) => nameKey(i.name).includes(q)))
-        // Rated recipes by their average, unrated as a neutral 3: low-rated ones sink.
-        .sort((a, b) => (s.recipeStars.get(b.id)?.average ?? 3) - (s.recipeStars.get(a.id)?.average ?? 3) || a.title.localeCompare(b.title, "nl"));
+        // Rated recipes by their average, unrated as a neutral 6: low-rated ones sink.
+        .sort((a, b) => (s.recipeStars.get(b.id)?.average ?? STARS_NEUTRAL) - (s.recipeStars.get(a.id)?.average ?? STARS_NEUTRAL) || a.title.localeCompare(b.title, "nl"));
       return hits.length ? `${hits.length} recipe${hits.length === 1 ? "" : "s"}:\n${hits.map((r) => recipeSummary(r, s.recipeStars.get(r.id), s.members)).join("\n")}` : "Nothing found.";
     },
   },
@@ -903,7 +903,7 @@ const TOOLS = [
   },
   {
     name: "kitchen_product_ratings",
-    description: "Known products (from receipts or typed in) with each person's stars (1-5) and note, the last price and store, and whether it is the preferred product of its item. Search by product, brand or item name.",
+    description: "Known products (from receipts or typed in) with each person's stars (1-10) and note, the last price and store, and whether it is the preferred product of its item. Search by product, brand or item name.",
     inputSchema: { type: "object", properties: { query: { type: "string" } } },
     async run({ query = "" }) {
       const s = await state();
@@ -912,7 +912,7 @@ const TOOLS = [
       return hits.slice(0, 40).map((p) => {
         const item = s.items.get(p.item_id);
         const rs = s.ratings.filter((r) => r.product_id === p.id)
-          .map((r) => `${s.members[r.member_id] ?? "?"} ${r.stars}/5${r.note ? ` "${r.note}"` : ""}`);
+          .map((r) => `${s.members[r.member_id] ?? "?"} ${r.stars}/10${r.note ? ` "${r.note}"` : ""}`);
         const scopes = preferencesOf(s.data.preferences, p.item_id).filter((x) => x.product_id === p.id)
           .map((x) => [x.store || "any store", x.recipe_id ? `for ${s.data.recipes[x.recipe_id]?.title ?? "a recipe"}` : null].filter(Boolean).join(" "));
         const facts = [euros(p.last_price_cents), p.store_only && p.store ? `only sold at ${p.store}` : p.store, item ? `item: ${item.name}${scopes.length ? ` (preferred: ${scopes.join("; ")})` : ""}` : null].filter(Boolean);
@@ -922,15 +922,15 @@ const TOOLS = [
   },
   {
     name: "kitchen_product_rate",
-    description: "Give a product 1-5 stars and an optional short note, as the person behind this connection (stars: 0 removes the rating). The product id comes from kitchen_product_ratings.",
+    description: "Give a product 1-10 stars and an optional short note, as the person behind this connection (stars: 0 removes the rating). The product id comes from kitchen_product_ratings.",
     inputSchema: {
       type: "object",
       required: ["product_id", "stars"],
-      properties: { product_id: { type: "string" }, stars: { type: "integer", minimum: 0, maximum: 5 }, note: { type: "string" } },
+      properties: { product_id: { type: "string" }, stars: { type: "integer", minimum: 0, maximum: STARS_MAX }, note: { type: "string" } },
     },
     async run({ product_id, stars, note = "" }) {
       await send([{ type: "rating.set", id: newId(), product_id, stars: stars || null, note }]);
-      return stars ? `Rated ${stars}/5.` : "Rating removed.";
+      return stars ? `Rated ${stars}/10.` : "Rating removed.";
     },
   },
 ];

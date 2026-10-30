@@ -1,8 +1,9 @@
 // One product ("AH Halfvolle melk 1 l"): what it last cost, where, when it
-// was bought, and what each person in the household thinks of it (1-5 stars
+// was bought, and what each person in the household thinks of it (1-10 stars
 // and a short note). From here, or from a list line or a recipe, it becomes
 // the product to buy for its item: at any store or one, for any recipe or
 // one (public/shared/preferences.js), which the list line then shows.
+import { STARS_MAX } from "../shared/recipe-ratings.js";
 import { h, title, toast, sheet, newId, fill } from "./dom.js";
 import { t, getLocale, formatDate } from "./i18n.js";
 import { OpError, productKey } from "../shared/ops.js";
@@ -30,7 +31,8 @@ export function money(cents) {
   return new Intl.NumberFormat(getLocale() === "nl" ? "nl-NL" : "en-GB", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-export const starsText = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+/** "★8": ten stars in a row would not fit next to the name. */
+export const starsText = (n) => `★${n}`;
 
 function refused(err) {
   toast(err instanceof OpError ? t(`errors.${err.code}`) : t("errors.refused"), { error: true });
@@ -210,7 +212,7 @@ export function recipeProducts(view, recipe, ingredientName) {
 
 function ratingForm(product, mine) {
   let stars = mine?.stars ?? 0;
-  const buttons = [1, 2, 3, 4, 5].map((n) => h("button", {
+  const buttons = Array.from({ length: STARS_MAX }, (_, i) => i + 1).map((n) => h("button", {
     type: "button", class: "star", "aria-label": t("product.stars", { n }),
     onclick: () => { stars = n; paint(); },
   }, "★"));

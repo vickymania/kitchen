@@ -58,7 +58,7 @@ test("engine: ratings are per person and can be taken back", () => {
   assert.deepEqual(live.map((r) => [r.member_id, r.stars]).sort(), [["member-sam-0001", 2], ["member-thomas-01", 5]]);
   applyOp(s, { type: "rating.set", product_id: "product-kaas-01", stars: null }, ctx());
   assert.ok(s.ratings["rating-thomas-1"].deleted_at);
-  assert.throws(() => applyOp(s, { type: "rating.set", id: "rating-thomas-3", product_id: "product-kaas-01", stars: 6 }, ctx()), OpError);
+  assert.throws(() => applyOp(s, { type: "rating.set", id: "rating-thomas-3", product_id: "product-kaas-01", stars: 11 }, ctx()), OpError);
 });
 
 test("excluded: never a purchase, product or preference; dropped from a stored receipt", () => {

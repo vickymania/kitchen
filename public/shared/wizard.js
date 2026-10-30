@@ -43,12 +43,12 @@ export const IN_HOUSE_DAYS = 7;
 // use_up (phase 4): a main ingredient in the pantry that must be eaten within
 // a few days pulls hardest after "not eaten for long", so what would go off
 // is cooked first.
-// stars (30-10-2026): the household's average stars of a recipe, five pulls
-// up, one pushes down, three or none is neutral (public/shared/recipe-ratings.js).
+// stars (30-10-2026): the household's average stars of a recipe, ten pulls
+// up, two push down, six or none is neutral (public/shared/recipe-ratings.js).
 export const WEIGHTS = { days: 3, house: 3, bonus: 1.5, use_up: 4, variety: 1.2, stars: 2.5 };
 
-/** From this average up the stars are a reason ("★ 4,5"). */
-export const STARS_REASON_MIN = 4;
+/** From this average up the stars are a reason ("★9"). */
+export const STARS_REASON_MIN = 8;
 
 // The cooking time someone has: "fast" allows fast recipes, "normal" fast and
 // normal ones, "elaborate" anything.

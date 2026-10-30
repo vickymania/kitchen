@@ -16,6 +16,7 @@
 import { UNIT_CODES, nameKey, mergeAmounts } from "./ingredients.js";
 import { isExcluded } from "./excluded.js";
 import { canonicalStore } from "./stores.js";
+import { STARS_MAX } from "./recipe-ratings.js";
 import { fromEntry, matchPurchase, round2, entryPantryId, purchasePantryId, parseLowAt, LOW_AT_MAX, drainRows, rowRate, rateEventId, RATE_MAX, RATE_MIN, RATE_SOURCES, RATE_RANK, pendingFits, pendingNeed, pendingEventId, PENDING_MAX } from "./pantry.js";
 import { estimateUseBy, addDays, KEEPS, SHELF_DAYS_MAX, SHELF_SOURCES, SHELF_RANK, openedDaysOf, itemShelfDays, openedUseBy } from "./shelf-life.js";
 import { CUISINES, MAIN_INGREDIENTS, TIME_CLASSES, MEALS, LABELS_BY, LABEL_FIELDS, sortMeals } from "./labels.js";
@@ -1390,7 +1391,7 @@ const HANDLERS = {
       }
       return {};
     }
-    const stars = num(op.stars, "stars", { min: 1, max: 5 });
+    const stars = num(op.stars, "stars", { min: 1, max: STARS_MAX });
     if (stars === null || !Number.isInteger(stars)) throw new OpError("bad_field", "stars");
     const row = prev ?? { id: id(op.id), member_id: ctx.memberId, product_id: p.id, created_at: ctx.now };
     Object.assign(row, { stars, note: text(op.note, 280, "note"), updated_at: ctx.now, deleted_at: null });
@@ -1554,7 +1555,7 @@ const HANDLERS = {
   },
 
   // Stars per person per recipe (migrations/0021_recipe_ratings.sql). stars
-  // 1-5 sets them, null clears them; skip: true only answers "Hoe was ...
+  // 1-10 sets them, null clears them; skip: true only answers "Hoe was ...
   // gisteren?" without stars. Setting or skipping marks asked_on (the op's
   // day), so the cook of that day or before is not asked about again.
   "recipe.rate"(state, op, ctx) {
@@ -1565,7 +1566,7 @@ const HANDLERS = {
     const skip = op.skip === true;
     let stars = null;
     if (!skip && op.stars !== null) {
-      stars = num(op.stars, "stars", { min: 1, max: 5 });
+      stars = num(op.stars, "stars", { min: 1, max: STARS_MAX });
       if (stars === null || !Number.isInteger(stars)) throw new OpError("bad_field", "stars");
     }
     const prev = Object.values(state.recipe_ratings).find((x) => x.member_id === ctx.memberId && x.recipe_id === recipeId);

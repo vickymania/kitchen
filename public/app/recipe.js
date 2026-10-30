@@ -268,7 +268,8 @@ export function mountRecipe(root, id) {
  */
 function labelsLine(r) {
   const parts = [
-    ...sortMeals(r.meals ?? []).map((m) => t(`labels.meal.${m}`)),
+    // sortMeals gives null for no meals.
+    ...(sortMeals(r.meals ?? []) ?? []).map((m) => t(`labels.meal.${m}`)),
     r.main_ingredient && r.main_ingredient !== "other" ? t(`labels.main.${r.main_ingredient}`) : null,
     r.cuisine && r.cuisine !== "other" ? t(`labels.cuisine.${r.cuisine}`) : null,
     r.time_minutes ? t("recipe.minutes", { n: r.time_minutes }) : r.time_class ? t(`labels.time.${r.time_class}`) : null,

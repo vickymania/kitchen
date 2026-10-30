@@ -29,32 +29,34 @@ function withRecipes() {
 test("recipe.rate: per member, the same again writes nothing, null clears, a bad value is refused", () => {
   const s = withRecipes();
   const rate = (memberId, o, now) => applyOp(s, { type: "recipe.rate", recipe_id: "recipe-pasta-001", on: "2026-10-30", ...o }, ctx(memberId, now));
-  const first = rate(THOMAS, { id: "rrate-thomas-001", stars: 4 });
+  const first = rate(THOMAS, { id: "rrate-thomas-001", stars: 8 });
   assert.deepEqual(first.changed, [["recipe_ratings", "rrate-thomas-001"]]);
-  assert.deepEqual(rate(THOMAS, { id: "rrate-thomas-999", stars: 4 }).changed, [], "the same stars again: nothing, and no second row");
-  rate(SAM, { id: "rrate-sam-00001", stars: 2 });
+  assert.deepEqual(rate(THOMAS, { id: "rrate-thomas-999", stars: 8 }).changed, [], "the same stars again: nothing, and no second row");
+  rate(SAM, { id: "rrate-sam-00001", stars: 4 });
   assert.equal(Object.keys(s.recipe_ratings).length, 2, "one row per person");
-  assert.deepEqual(recipeStars(s.recipe_ratings, "recipe-pasta-001"), { average: 3, count: 2, byMember: { [THOMAS]: 4, [SAM]: 2 } });
-  rate(THOMAS, { id: "rrate-thomas-001", stars: 5 }, "2026-10-30T10:00:00.000Z");
-  assert.equal(s.recipe_ratings["rrate-thomas-001"].stars, 5, "a change patches the person's row");
-  assert.equal(recipeStars(s.recipe_ratings, "recipe-pasta-001").average, 3.5);
+  assert.deepEqual(recipeStars(s.recipe_ratings, "recipe-pasta-001"), { average: 6, count: 2, byMember: { [THOMAS]: 8, [SAM]: 4 } });
+  rate(THOMAS, { id: "rrate-thomas-001", stars: 10 }, "2026-10-30T10:00:00.000Z");
+  assert.equal(s.recipe_ratings["rrate-thomas-001"].stars, 10, "a change patches the person's row");
+  assert.equal(recipeStars(s.recipe_ratings, "recipe-pasta-001").average, 7);
   rate(SAM, { stars: null });
   assert.equal(s.recipe_ratings["rrate-sam-00001"].stars, null, "null clears");
   assert.equal(s.recipe_ratings["rrate-sam-00001"].deleted_at, null, "the row stays (it remembers the question was answered)");
-  assert.deepEqual(recipeStars(s.recipe_ratings, "recipe-pasta-001"), { average: 5, count: 1, byMember: { [THOMAS]: 5 } }, "a cleared row is not in the average");
+  assert.deepEqual(recipeStars(s.recipe_ratings, "recipe-pasta-001"), { average: 10, count: 1, byMember: { [THOMAS]: 10 } }, "a cleared row is not in the average");
   assert.deepEqual(rate(SAM, { stars: null }).changed, [], "clearing twice: nothing");
   assert.deepEqual(applyOp(s, { type: "recipe.rate", recipe_id: "recipe-chili-001", stars: null }, ctx(THOMAS)).changed, [], "clearing what was never rated: nothing");
-  for (const stars of [0, 6, 2.5, "x"]) assert.throws(() => rate(THOMAS, { stars }), OpError);
+  for (const stars of [0, 11, 2.5, "x", -1]) assert.throws(() => rate(THOMAS, { stars }), OpError);
   assert.throws(() => applyOp(s, { type: "recipe.rate", id: "rrate-x-0000001", recipe_id: "recipe-none-0001", stars: 3 }, ctx(THOMAS)), OpError);
   assert.equal(importerMayApply({ type: "recipe.rate", recipe_id: "recipe-pasta-001", stars: 3 }), false, "the importer never rates");
 });
 
-test("starsPart: five stars pull, one pushes, three or none is neutral", () => {
-  assert.equal(starsPart(5), 1);
-  assert.equal(starsPart(1), -1);
-  assert.equal(starsPart(3), 0);
+test("starsPart: ten stars pull, two push, six or none is neutral", () => {
+  assert.equal(starsPart(10), 1);
+  assert.equal(starsPart(2), -1);
+  assert.equal(starsPart(1), -1, "clamped");
+  assert.equal(starsPart(6), 0);
   assert.equal(starsPart(null), 0);
-  assert.equal(starsPart(4), 0.5);
+  assert.equal(starsPart(8), 0.5);
+  assert.equal(starsPart(9), 0.75);
 });
 
 // ------------------------------------------------------------ the day-after question
@@ -107,15 +109,15 @@ test("wizard ranking: the household's stars pull a recipe up and push a low-rate
   const ctxFor = (ratings) => ({ lastCooked: {}, house: [], bonus: [], today: "2026-10-30", stars: starsByRecipe(ratings) });
   const plain = scoreRecipe(data.recipes["recipe-pasta-001"], ctxFor({})).score;
   const rows = {
-    a: { id: "a", member_id: THOMAS, recipe_id: "recipe-pasta-001", stars: 5 },
-    b: { id: "b", member_id: SAM, recipe_id: "recipe-pasta-001", stars: 4 },
-    c: { id: "c", member_id: THOMAS, recipe_id: "recipe-chili-001", stars: 1 },
+    a: { id: "a", member_id: THOMAS, recipe_id: "recipe-pasta-001", stars: 10 },
+    b: { id: "b", member_id: SAM, recipe_id: "recipe-pasta-001", stars: 8 },
+    c: { id: "c", member_id: THOMAS, recipe_id: "recipe-chili-001", stars: 2 },
   };
   const good = scoreRecipe(data.recipes["recipe-pasta-001"], ctxFor(rows));
   const bad = scoreRecipe(data.recipes["recipe-chili-001"], ctxFor(rows));
   assert.equal(good.score, plain + WEIGHTS.stars * 0.75);
   assert.equal(bad.score, plain - WEIGHTS.stars);
-  assert.deepEqual(good.reasons.find((r) => r.key === "stars").vars, { stars: 4.5, n: 2 }, "4+ stars is a reason");
+  assert.deepEqual(good.reasons.find((r) => r.key === "stars").vars, { stars: 9, n: 2 }, "8+ stars is a reason");
   assert.equal(bad.reasons.some((r) => r.key === "stars"), false, "low stars are no reason, they only rank lower");
   // In propose: with no chance, the five-star recipe comes first, the one-star last.
   data.recipes["recipe-soep-0001"] = recipe("recipe-soep-0001", "Soep", { ingredients: [{ name: "spinazie", qty: 1, unit: null }] });

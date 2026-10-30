@@ -6,20 +6,20 @@ import { h, toast, newId } from "./dom.js";
 import { t, formatNumber, getLocale } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import * as store from "./store.js";
-import { rateAsks, recipeStars, myRecipeRating, recipeCooks } from "../shared/recipe-ratings.js";
+import { rateAsks, recipeStars, myRecipeRating, recipeCooks, STARS_MAX } from "../shared/recipe-ratings.js";
 
 const refused = (err) => toast(err instanceof OpError ? t(`errors.${err.code}`) : t("errors.refused"), { error: true });
 
-/** Five star buttons; onPick(n) with n 1..5, or null when the current value is tapped again. */
+/** Ten star buttons (32 px each: ten fit in a row at 375 px); onPick(n) with n 1..10, or null when the current value is tapped again. */
 export function miniStars(current, onPick, { label = "" } = {}) {
   return h("span", { class: "mini-stars", role: "group", "aria-label": label || null },
-    [1, 2, 3, 4, 5].map((n) => h("button", {
+    Array.from({ length: STARS_MAX }, (_, i) => i + 1).map((n) => h("button", {
       type: "button", class: "mini-star", "aria-label": t("rstars.star", { n }), "aria-pressed": String(Boolean(current) && n <= current),
       onclick: (ev) => { ev.stopPropagation(); onPick(n === current ? null : n); },
     }, "★")));
 }
 
-/** "★4,5 · 2 stemmen", or "" without stars. */
+/** "★8,5 · 2 stemmen", or "" without stars. */
 export function averageText(stars) {
   return stars ? t("rstars.average", { avg: formatNumber(stars.average), n: stars.count }) : "";
 }

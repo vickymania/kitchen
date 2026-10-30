@@ -547,7 +547,7 @@
     "stars": { "one": "1 ster", "other": "{n} sterren" },
     "note": "Notitie",
     "note_placeholder": "Romig, te zout, neem de grote…",
-    "pick_stars": "Kies eerst 1 tot 5 sterren.",
+    "pick_stars": "Kies eerst 1 tot 10 sterren.",
     "rate": "Oordeel opslaan",
     "unrate": "Mijn oordeel weghalen",
     "is_preferred": "Dit koop je voor {item}: {where}.",

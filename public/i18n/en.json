@@ -547,7 +547,7 @@
     "stars": { "one": "1 star", "other": "{n} stars" },
     "note": "Note",
     "note_placeholder": "Creamy, too salty, buy the big one…",
-    "pick_stars": "Pick 1 to 5 stars first.",
+    "pick_stars": "Pick 1 to 10 stars first.",
     "rate": "Save rating",
     "unrate": "Remove my rating",
     "is_preferred": "This is what you buy for {item}: {where}.",

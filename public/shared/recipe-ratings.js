@@ -1,10 +1,17 @@
-// Stars for recipes (30-10-2026): 1-5 per person, the household's
+// Stars for recipes (30-10-2026): 1-10 per person (10 since the same
+// day: "ik wil 10 sterren ipv 5"), the household's
 // average shown with them. Not right after cooking ("dan moet je nog gaan
 // eten"): the day after a cook each person is asked "Hoe was <recipe>
 // gisteren?", once per cook, and can skip it. The rows are the op
 // recipe.rate's (public/shared/ops.js, table recipe_ratings). Pure: no screen,
 // no store; the phone, the wizard and the MCP server read the same numbers.
 import { daysBetween } from "./intervals.js";
+
+/** The most stars a person can give, for a recipe and for a product (migrations/0026_ten_stars.sql doubled the old 1-5). */
+export const STARS_MAX = 10;
+
+/** The stars that neither pull nor push: 6 (the old 3). */
+export const STARS_NEUTRAL = 6;
 
 /** Asked on the day after the cook only. */
 export const ASK_AFTER_DAYS = 1;
@@ -40,12 +47,12 @@ export function myRecipeRating(rows, memberId, recipeId) {
 }
 
 /**
- * How the stars move a recipe in a ranking: -1 (one star) .. +1 (five
- * stars), 0 for three stars or none at all.
+ * How the stars move a recipe in a ranking: -1 (two stars) .. +1 (ten
+ * stars), 0 for six stars or none at all (the old 1-5 doubled).
  */
 export function starsPart(average) {
   if (average === null || average === undefined || !Number.isFinite(average)) return 0;
-  return Math.max(-1, Math.min(1, (average - 3) / 2));
+  return Math.max(-1, Math.min(1, (average - STARS_NEUTRAL) / (STARS_MAX - STARS_NEUTRAL)));
 }
 
 /**

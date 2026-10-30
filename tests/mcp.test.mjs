@@ -214,9 +214,9 @@ test("the kitchen MCP server: due items from the history, ratings read and writt
     assert.match(later.text, /- Kaas: last 10 days ago, usually every ~30 days$/);
 
     const rated = await client.tool("kitchen_product_rate", { product_id: "product-mcp-001", stars: 4, note: "goed" });
-    assert.equal(rated.text, "Rated 4/5.");
+    assert.equal(rated.text, "Rated 4/10.");
     const read = await client.tool("kitchen_product_ratings", { query: "melk" });
-    assert.match(read.text, /- AH Halfvolle melk, 1 l \[id: product-mcp-001\] item: Melk; ratings: Thomas 4\/5 "goed"/);
+    assert.match(read.text, /- AH Halfvolle melk, 1 l \[id: product-mcp-001\] item: Melk; ratings: Thomas 4\/10 "goed"/);
     const wrong = await client.tool("kitchen_product_rate", { product_id: "product-mcp-404", stars: 4 });
     assert.equal(wrong.error, true);
   } finally {
@@ -483,14 +483,14 @@ test("recipe stars: kitchen_recipes_search shows them and ranks low-rated last, 
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${live.token}` },
       body: JSON.stringify({ ops: [{ op_id: `op-mcp-rstars-${n}0000`, type: "recipe.rate", id: `rrate-mcp-${n}00000`, recipe_id, stars }] }),
     });
-    await rate(ids["Andijvie stamppot"], 1, 1);
-    await rate(ids.Chili, 5, 2);
+    await rate(ids["Andijvie stamppot"], 2, 1);
+    await rate(ids.Chili, 10, 2);
     const found = await client.tool("kitchen_recipes_search", {});
     const order = [...found.text.matchAll(/^- (.+?) \(/gm)].map((m) => m[1]);
-    assert.deepEqual(order, ["Chili", "Bami", "Andijvie stamppot"], "five stars first, unrated in between, one star last");
-    assert.match(found.text, /Chili \(2 p\) — 1 ingredients, 1 steps, stars 5\/5 from 1 \(Thomas 5\)/);
+    assert.deepEqual(order, ["Chili", "Bami", "Andijvie stamppot"], "ten stars first, unrated in between, two stars last");
+    assert.match(found.text, /Chili \(2 p\) — 1 ingredients, 1 steps, stars 10\/10 from 1 \(Thomas 10\)/);
     const got = await client.tool("kitchen_recipe_get", { id: ids["Andijvie stamppot"] });
-    assert.match(got.text, /Stars: 1\/5 from 1 \(Thomas 1\)/);
+    assert.match(got.text, /Stars: 2\/10 from 1 \(Thomas 2\)/);
     assert.match((await client.tool("kitchen_recipe_get", { id: ids.Bami })).text, /Stars: none yet/);
   } finally {
     client.close();
