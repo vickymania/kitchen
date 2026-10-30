@@ -18,6 +18,8 @@ import { isExcluded } from "./excluded.js";
 import { daysBetween } from "./intervals.js";
 import { ruleRate } from "./usage-rates.js";
 import { portionCategory, categoryPack, stapleDefault } from "./default-portions.js";
+import { ingredientKey, resolveName, itemFinder } from "./ingredient-match.js";
+import { aliasTarget } from "./item-find.js";
 
 /** A receipt within this many days of a tick is the same shopping. */
 export const MATCH_DAYS = 2;
@@ -369,18 +371,25 @@ export function cookPlan({ recipe, data: stored, today, scale = (i) => i, short 
   const rows = liveRows(data.pantry)
     .sort((a, b) => (!a.use_by - !b.use_by) || String(a.use_by).localeCompare(String(b.use_by)) || a.added_on.localeCompare(b.added_on));
   const left = new Map(rows.map((r) => [r.id, r.amount]));
+  const find = pantryFinder(data, rows);
   const out = [];
   for (const [index, raw] of (recipe.ingredients ?? []).entries()) {
     if (!raw || raw.heading || raw.optional) continue;
-    const key = nameKey(raw.name);
+    // The name without how it is prepared: "melk, lauwwarm" is melk.
+    const key = ingredientKey(raw.name);
     if (!key || isExcluded(raw.name)) continue;
+    // The thing the household calls it (public/shared/ingredient-match.js):
+    // its rows come first, whatever their titles say; else the old word match.
+    // Portions and pack defaults read the recipe's own words ("verse
+    // peterselie" is no jar of dried herbs), not the item's name.
+    const hit = resolveName(raw.name, find);
     // The most specific rows first ("tortilla chips" takes "Tortillachips"
     // before anything called "chips"); among equals, the ones that run out first.
-    const scored = rows.map((r) => [r, left.get(r.id) > 0 ? stuffScore(key, rowKey(r, data.items)) : 0]).filter(([, sc]) => sc > 0);
+    const scored = rows.map((r) => [r, left.get(r.id) > 0 ? (hit?.target.rows.has(r) ? RESOLVED : stuffScore(key, rowKey(r, data.items))) : 0]).filter(([, sc]) => sc > 0);
     const top = Math.max(0, ...scored.map(([, sc]) => sc));
     const matching = scored.filter(([, sc]) => sc === top).map(([r]) => r);
     if (!matching.length) {
-      if (short) noteShort(short, raw, key, scale, data, 1, null);
+      if (short) noteShort(short, raw, key, scale, data, 1, hit?.target.item?.id ?? null);
       continue;
     }
     const have = round2(matching.reduce((n, r) => n + left.get(r.id), 0));
@@ -403,6 +412,38 @@ export function cookPlan({ recipe, data: stored, today, scale = (i) => i, short 
     if (short && need && rest > 0.005 && need.packs > 0) noteShort(short, raw, key, scale, data, rest / need.packs, matching[0].item_id);
   }
   return out;
+}
+
+/** The score of a row of the very item an ingredient resolved to: above any word match. */
+const RESOLVED = 1000;
+
+/**
+ * key -> { item, rows } for the ingredient resolver: the household's item of
+ * that name (findItem) with its live rows (its own item id, an item merged
+ * into it, or a row titled the same canonical name), else the rows whose own
+ * key is that name (a row without an item). Null when neither exists, so
+ * the resolver tries its next candidate.
+ */
+function pantryFinder(data, rows) {
+  const items = data.items ?? {};
+  const findItemOf = itemFinder(data);
+  const byKey = new Map();
+  for (const r of rows) {
+    const k = canonicalName(rowKey(r, items)).key;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(r);
+  }
+  return (key) => {
+    const item = findItemOf(key);
+    if (item) {
+      const own = canonicalName(item.name_key ?? nameKey(item.name)).key;
+      const mine = rows.filter((r) => r.item_id === item.id || aliasTarget(items, items[r.item_id])?.id === item.id
+        || canonicalName(rowKey(r, items)).key === own);
+      return { item, rows: new Set(mine) };
+    }
+    const loose = byKey.get(canonicalName(key).key);
+    return loose ? { item: null, rows: new Set(loose) } : null;
+  };
 }
 
 // ------------------------------------------ cooking before the receipt

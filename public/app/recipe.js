@@ -11,6 +11,7 @@ import { lastCookedDays } from "../shared/wizard.js";
 import { daysBetween } from "../shared/intervals.js";
 import { recipeProductSheet, recipeProducts } from "./product.js";
 import { cookTakes, cookPending, listCover } from "../shared/pantry.js";
+import { listTargets, itemFinder } from "../shared/ingredient-match.js";
 import { OpError } from "../shared/ops.js";
 import { packsText } from "./pantry.js";
 import { recipeStarsLine } from "./stars.js";
@@ -174,13 +175,21 @@ export async function addToList(recipe) {
   if (!added?.length) return;
   // The list shows the newest line first; adding back to front keeps the
   // recipe's own order on the list.
+  // Each line goes to the household's own item (public/shared/ingredient-match.js):
+  // "wit patentbloem" lands on Bloem, three eggs on one Eieren line, "zout en
+  // peper" on Zout and Peper, never on a new item named after the recipe's words.
+  const view = store.getView();
+  const find = itemFinder(view);
   for (const i of [...added].reverse()) {
     const amount = amountOf(i);
-    await store.dispatch({
-      type: "entry.add", id: newId(), item_id: newId(), title: i.name,
-      amounts: amount ? [amount] : [],
-      source: { recipe_id: recipe.id, title: recipe.title },
-    });
+    const targets = listTargets(i.name, view, find);
+    for (const target of targets) {
+      await store.dispatch({
+        type: "entry.add", id: newId(), item_id: target.item?.id ?? newId(), title: target.title,
+        amounts: amount && targets.length === 1 ? [amount] : [],
+        source: { recipe_id: recipe.id, title: recipe.title },
+      });
+    }
   }
   const me = store.getMe();
   toast(t("add.done", { n: added.length }), { action: t("add.open_list"), href: `${me?.other_app ?? ""}/` });

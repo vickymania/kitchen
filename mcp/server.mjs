@@ -29,6 +29,7 @@ import { lowStock, LOW_DEFAULT } from "../public/shared/low-stock.js";
 import { didYouMean } from "../public/shared/suggest.js";
 import { compactKey } from "../public/shared/item-names.js";
 import { findItem } from "../public/shared/ops.js";
+import { listTargets, itemFinder } from "../public/shared/ingredient-match.js";
 import { addDays } from "../public/shared/shelf-life.js";
 
 /** kitchen_recent_purchases: candidate items per purchase, and the output size (Claude cannot read more). */
@@ -486,7 +487,8 @@ const TOOLS = [
       },
     },
     async run({ id, servings, skip = [], include_optional = [] }) {
-      const r = (await state()).recipes.find((x) => x.id === id);
+      const s = await state();
+      const r = s.recipes.find((x) => x.id === id);
       if (!r) return "No recipe with that id.";
       const skipKeys = new Set(skip.map(nameKey));
       const optKeys = new Set(include_optional.map(nameKey));
@@ -494,9 +496,15 @@ const TOOLS = [
         .filter((i) => !i.heading && !skipKeys.has(nameKey(i.name)) && (!i.optional || optKeys.has(nameKey(i.name))))
         .map((i) => scaleIngredient(i, r.servings, servings ?? r.servings));
       if (!picked.length) return "Nothing to add.";
-      await send(picked.reverse().map((i) => {
+      // Each line on the household's own item, as the app's "Op de lijst" does
+      // (public/shared/ingredient-match.js listTargets): "wit patentbloem" is Bloem.
+      const names = { items: Object.fromEntries(s.items), aliases: s.names.aliases };
+      const find = itemFinder(names);
+      await send(picked.reverse().flatMap((i) => {
         const a = amountOf(i);
-        return { type: "entry.add", id: newId(), item_id: newId(), title: i.name, amounts: a ? [a] : [], source: { recipe_id: r.id, title: r.title } };
+        const targets = listTargets(i.name, names, find);
+        return targets.map((t) => ({ type: "entry.add", id: newId(), item_id: t.item?.id ?? newId(), title: t.title,
+          amounts: a && targets.length === 1 ? [a] : [], source: { recipe_id: r.id, title: r.title } }));
       }));
       return `${picked.length} ingredients of ${r.title} put on the list${servings ? ` (for ${servings} people)` : ""}.`;
     },

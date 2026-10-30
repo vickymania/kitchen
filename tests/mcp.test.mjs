@@ -101,6 +101,29 @@ test("the kitchen MCP server: recipes in, ingredients onto the list, merged", as
   }
 });
 
+test("the kitchen MCP server: a recipe's lines land on the household's own items (ingredient-match.js)", async () => {
+  const live = await liveWorker();
+  const client = mcp(live.origin, live.token);
+  try {
+    await client.tool("kitchen_list_add", { items: [{ title: "Bloem" }, { title: "Eieren" }, { title: "Zout" }, { title: "Peper" }] });
+    const saved = await client.tool("kitchen_recipe_save", {
+      title: "Broodjes van Noor", servings: 4,
+      ingredients: ["500 g wit patentbloem", "1 ei", "1 ei, losgeklopt", "zout en peper"],
+    });
+    const id = saved.text.match(/\[id: ([\w-]+)\]/)[1];
+    await client.tool("kitchen_recipe_to_list", { id });
+    const got = await client.tool("kitchen_list_get", {});
+    assert.match(got.text, /- Bloem — 500 g(r)? — for Broodjes van Noor/);
+    assert.match(got.text, /- Eieren — 2 — for Broodjes van Noor/);
+    assert.match(got.text, /- Zout — for Broodjes van Noor/);
+    assert.match(got.text, /- Peper — for Broodjes van Noor/);
+    assert.doesNotMatch(got.text, /patentbloem|losgeklopt|zout en peper/);
+  } finally {
+    client.close();
+    live.close();
+  }
+});
+
 test("the kitchen MCP server: preferred products per store and recipe, offers on them, never an excluded thing", async () => {
   const live = await liveWorker();
   const today = new Date().toLocaleDateString("sv-SE");

@@ -7,6 +7,7 @@ import { h, title, toast, sheet, newId, fill } from "./dom.js";
 import { t, getLocale, formatDate } from "./i18n.js";
 import { OpError, productKey } from "../shared/ops.js";
 import { nameKey } from "../shared/ingredients.js";
+import { resolveIngredient } from "../shared/ingredient-match.js";
 import { preferenceAt, preferencesOf } from "../shared/preferences.js";
 import { itemKind, orderByFit } from "../shared/product-kinds.js";
 import { canonicalStore } from "../shared/stores.js";
@@ -65,7 +66,9 @@ export function candidatesFor(view, item) {
   return [...ids].map((id) => view.products?.[id]).filter((p) => p && !p.deleted_at);
 }
 
-const itemByName = (view, name) => Object.values(view.items).find((i) => !i.deleted_at && i.name_key === nameKey(name)) ?? null;
+// The item a recipe's ingredient means, with the same resolver as cooking and
+// "Op de lijst" ("gemalen nootmuskaat" is Nootmuskaat).
+const itemByName = (view, name) => resolveIngredient(name, view)?.item ?? null;
 
 /**
  * Choose the product to buy for an item, at any store or one store, for any

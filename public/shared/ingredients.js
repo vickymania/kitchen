@@ -63,10 +63,46 @@ function readNumber(text) {
   return null;
 }
 
+// How a thing is prepared, as a word or a phrase: a past participle
+// ("losgeklopt", "fijngehakt", "uitgelekt", "gesmolten"), a "ver-" one
+// ("verkruimeld"), a temperature ("lauwwarm", "op kamertemperatuur"), a cut
+// ("in blokjes"). "gehakt" alone is mince, never a note.
+const PARTICIPLE = String.raw`(?:[a-z]{0,8}ge[a-z]{2,}[dt]|ge(?:smolten|bakken|sneden|braden)|ver(?:kruimeld|brokkeld|warmd|deeld|snipperd))`;
+const PREP_WORD = String.raw`(?:${PARTICIPLE}|lauw(?:warm)?|(?:op )?kamertemperatuur|in (?:blokjes|plakjes|stukjes|reepjes|ringen|partjes|de lengte .+))`;
+
 const PREP_AFTER_COMMA = new RegExp(String.raw`^([^,]+),\s*(` + [
-  String.raw`(?:fijn|grof)?ge[a-z]+[dt]\b.*`, "in .+", "zonder .+", "met .+", "zaden .+", "op gevoel", "naar smaak",
+  String.raw`${PARTICIPLE}\b.*`, String.raw`lauw(?:warm)?\b.*`, String.raw`(?:op )?kamertemperatuur\b.*`, "warm", "koud", "zacht", "ontdooid",
+  "in .+", "zonder .+", "met .+", "zaden .+", "op gevoel", "naar smaak", "naar keuze", "bij voorkeur .+", "plus extra .+",
   "scheut(je)?", "om .+", "uitgeperst", "voor .+", "finely .+", "chopped", "diced", "sliced", "grated", "drained", "to taste",
+  "melted", "softened", "beaten", "lukewarm", "crumbled", "minced", "peeled", "(?:at )?room temperature",
 ].join("|") + ")$", "i");
+
+// The same at the end of a name without a comma: "ei losgeklopt", "ui gesnipperd".
+const PREP_TRAILING = new RegExp(String.raw`^(.+?)\s+(${PREP_WORD})$`, "i");
+const isMince = (word) => /gehakt$/i.test(word) && !/^(?:fijn|grof)gehakt$/i.test(word);
+
+/**
+ * A name and how it is prepared: "melk, lauwwarm" -> { name: "melk", note:
+ * "lauwwarm" }, "beschuiten, verkruimeld", "ei losgeklopt". A list ("olie,
+ * peper, zout") and mince ("half-om-half gehakt") stay as they are. Used by
+ * parseIngredient for new lines and by the ingredient resolver
+ * (public/shared/ingredient-match.js) for lines stored before 30-10-2026.
+ */
+export function splitPrep(text) {
+  let name = String(text ?? "");
+  const notes = [];
+  const comma = name.match(PREP_AFTER_COMMA);
+  if (comma) {
+    name = comma[1];
+    notes.push(comma[2].trim());
+  }
+  const trailing = name.trim().match(PREP_TRAILING);
+  if (trailing && !isMince(trailing[2])) {
+    name = trailing[1];
+    notes.unshift(trailing[2]);
+  }
+  return { name: name.replace(/\s+/g, " ").trim(), note: notes.join("; ") };
+}
 
 /** "optioneel: maïzena", "(Geraspte kaas)" and friends are optional. */
 const OPTIONAL_RE = /^(?:optioneel|optional|evt\.?|eventueel)\s*[:\-]?\s*/i;
@@ -122,17 +158,10 @@ export function parseIngredient(line) {
     return " ";
   });
   // How to prepare it is a note, not part of the name: "uien, gepeld",
-  // "knoflook, uitgeperst", "paneermeel, op gevoel", "ui gesnipperd".
-  const comma = name.match(PREP_AFTER_COMMA);
-  if (comma) {
-    name = comma[1];
-    notes.unshift(comma[2].trim());
-  }
-  const trailing = name.trim().match(/^(.+?)\s+((?:fijn|grof)?ge[a-z]{3,}[dt])$/i);
-  if (trailing && trailing[2].toLowerCase() !== "gehakt") {
-    name = trailing[1];
-    notes.unshift(trailing[2]);
-  }
+  // "knoflook, uitgeperst", "melk, lauwwarm", "ui gesnipperd".
+  const prep = splitPrep(name);
+  name = prep.name;
+  if (prep.note) notes.unshift(prep.note);
   name = name.replace(/\s+/g, " ").trim().replace(/^[:\-,]\s*/, "").replace(/[\s.]+$/, "");
 
   return {
