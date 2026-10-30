@@ -119,10 +119,11 @@ const PANTRY = [
   { id: "p-puntpaprika", title: "Puntpaprika" },
 ];
 
-test("cooking: the nachos lasagne takes Tortillachips, Rode ui, Bosui and Puntpaprika, never Chips or yellow Uien", () => {
+test("cooking: the nachos lasagne takes Rode ui, Bosui and Puntpaprika, never Chips or yellow Uien", () => {
   const takes = takesFor(PANTRY);
   assert.equal(takes["p-chips"], undefined, "tortilla chips never take plain Chips");
-  assert.equal(takes["p-tortilla"], 1);
+  // Thomas, 30-10-2026: "X of Y" takes nothing unless both are the same item.
+  assert.equal(takes["p-tortilla"], undefined, "nacho of tortilla chips: one of two, so nothing");
   assert.equal(takes["p-uien"], undefined, "rode ui never takes the yellow Uien");
   assert.equal(takes["p-rodeui"], 1, "the red onion is used, one piece");
   assert.ok(takes["p-bosui"] > 0, "lente-uien is Bosui");

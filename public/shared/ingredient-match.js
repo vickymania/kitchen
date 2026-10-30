@@ -20,6 +20,11 @@
 // Never a typo-fuzzy match, never a word added ("melk" never becomes "Volle
 // melk"), never a colour dropped ("rode ui" is not Uien, "rode peper" is no
 // pepper). A name the household does not know resolves to null.
+// A line of alternatives ("cheddar of goudse kaas", "kippenbouillon,
+// groentebouillon of water", "kippen- of runderbouillon") means one of them,
+// so it resolves only when every alternative is the same item (Thomas,
+// 30-10-2026: "nasi of wokgroenten" took the wokgroenten); else nothing, and
+// cooking takes nothing for it.
 import { nameKey, splitPrep } from "./ingredients.js";
 import { canonicalName, GENERIC } from "./item-names.js";
 import { findItem } from "./item-find.js";
@@ -96,10 +101,25 @@ function varietyOf(key) {
   return null;
 }
 
+const ALTERNATIVE = /\s(?:en\/of|of|or)\s/i;
+
+/**
+ * The alternatives of a line without its preparation: "cheddar of goudse
+ * kaas" -> ["cheddar", "goudse kaas"], "kip, rund of varken" -> three; null
+ * for a line that names one thing. A half word ("kippen-" of "kippen- of
+ * runderbouillon") stays as it is, with its hyphen: it never resolves.
+ */
+export function alternativesOf(name) {
+  const plain = splitPrep(name).name;
+  if (!ALTERNATIVE.test(plain)) return null;
+  return plain.split(/\s*,\s*|\s+(?:en\/of|of|or)\s+/i).map((x) => x.trim()).filter(Boolean);
+}
+
 /**
  * Every name an ingredient could mean, most specific first: [{ key, how }].
- * "X of Y" is each alternative in turn. Keys are nameKey form, without
- * duplicates and without GENERIC lines ("vlees" is no product).
+ * "X of Y" lists each alternative in turn (resolveName only takes a hit
+ * all alternatives share). Keys are nameKey form, without duplicates and
+ * without GENERIC lines ("vlees" is no product).
  */
 export function matchKeys(name) {
   const out = [];
@@ -145,15 +165,32 @@ export function matchKeys(name) {
 /**
  * The first candidate of `name` that `find(key)` knows: { target, key, how }
  * or null. `find` is a function key -> anything truthy (an item, a group of
- * pantry rows).
+ * pantry rows). A line of alternatives: the hit when every alternative finds
+ * the same item, else null.
  */
 export function resolveName(name, find) {
+  const alternatives = alternativesOf(name);
+  if (!alternatives) return resolveOne(name, find);
+  let first = null;
+  for (const alt of alternatives) {
+    const hit = /-$/.test(alt) ? null : resolveOne(alt, find);
+    if (!hit || (first && !sameTarget(first.target, hit.target))) return null;
+    first ??= hit;
+  }
+  return first;
+}
+
+function resolveOne(name, find) {
   for (const { key, how } of matchKeys(name)) {
     const target = find(key);
     if (target) return { target, key, how };
   }
   return null;
 }
+
+/** An item, or the pantry's { item, rows } for one: the same when it is the same item. */
+const targetId = (t) => t?.item !== undefined ? t.item?.id ?? null : t?.id ?? null;
+const sameTarget = (a, b) => a === b || (targetId(a) !== null && targetId(a) === targetId(b));
 
 /** key -> the household's live item for it (findItem: name, alias, merged name, without spaces), memoised for one pass. */
 export function itemFinder(data) {

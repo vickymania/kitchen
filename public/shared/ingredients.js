@@ -64,16 +64,16 @@ function readNumber(text) {
 }
 
 // How a thing is prepared, as a word or a phrase: a past participle
-// ("losgeklopt", "fijngehakt", "uitgelekt", "gesmolten"), a "ver-" one
+// ("losgeklopt", "fijngehakt", "uitgelekt", "gesmolten", "fijngesneden"), a "ver-" one
 // ("verkruimeld"), a temperature ("lauwwarm", "op kamertemperatuur"), a cut
 // ("in blokjes"). "gehakt" alone is mince, never a note.
-const PARTICIPLE = String.raw`(?:[a-z]{0,8}ge[a-z]{2,}[dt]|ge(?:smolten|bakken|sneden|braden)|ver(?:kruimeld|brokkeld|warmd|deeld|snipperd))`;
+const PARTICIPLE = String.raw`(?:[a-z]{0,8}ge[a-z]{2,}[dt]|[a-z]{0,8}ge(?:smolten|bakken|sneden|braden)|ver(?:kruimeld|brokkeld|warmd|deeld|snipperd))`;
 const PREP_WORD = String.raw`(?:${PARTICIPLE}|lauw(?:warm)?|(?:op )?kamertemperatuur|in (?:blokjes|plakjes|stukjes|reepjes|ringen|partjes|de lengte .+))`;
 
 const PREP_AFTER_COMMA = new RegExp(String.raw`^([^,]+),\s*(` + [
   String.raw`${PARTICIPLE}\b.*`, String.raw`lauw(?:warm)?\b.*`, String.raw`(?:op )?kamertemperatuur\b.*`, "warm", "koud", "zacht", "ontdooid",
   "in .+", "zonder .+", "met .+", "zaden .+", "op gevoel", "naar smaak", "naar keuze", "bij voorkeur .+", "plus extra .+",
-  "scheut(je)?", "om .+", "uitgeperst", "voor .+", "finely .+", "chopped", "diced", "sliced", "grated", "drained", "to taste",
+  "scheut(je)?", "om .+", "uitgeperst", "eetrijp", "(?:goed )?rijp", "voor .+", "finely .+", "chopped", "diced", "sliced", "grated", "drained", "to taste",
   "melted", "softened", "beaten", "lukewarm", "crumbled", "minced", "peeled", "(?:at )?room temperature",
 ].join("|") + ")$", "i");
 

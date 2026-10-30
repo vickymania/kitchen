@@ -18,7 +18,7 @@ import { isExcluded } from "./excluded.js";
 import { daysBetween } from "./intervals.js";
 import { ruleRate } from "./usage-rates.js";
 import { portionCategory, categoryPack, stapleDefault } from "./default-portions.js";
-import { ingredientKey, resolveName, itemFinder } from "./ingredient-match.js";
+import { ingredientKey, resolveName, itemFinder, alternativesOf } from "./ingredient-match.js";
 import { aliasTarget } from "./item-find.js";
 
 /** A receipt within this many days of a tick is the same shopping. */
@@ -383,6 +383,9 @@ export function cookPlan({ recipe, data: stored, today, scale = (i) => i, short 
     // Portions and pack defaults read the recipe's own words ("verse
     // peterselie" is no jar of dried herbs), not the item's name.
     const hit = resolveName(raw.name, find);
+    // "nasi of wokgroenten": one of them, so nothing is taken unless every
+    // alternative is the same item (then hit has its rows).
+    if (!hit && alternativesOf(raw.name)) continue;
     // The most specific rows first ("tortilla chips" takes "Tortillachips"
     // before anything called "chips"); among equals, the ones that run out first.
     const scored = rows.map((r) => [r, left.get(r.id) > 0 ? (hit?.target.rows.has(r) ? RESOLVED : stuffScore(key, rowKey(r, data.items))) : 0]).filter(([, sc]) => sc > 0);

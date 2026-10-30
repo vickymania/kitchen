@@ -131,6 +131,46 @@ test("candidate names: deterministic, most specific first", () => {
   assert.ok(numberForms("champignons").includes("champignon"));
 });
 
+test("a line of alternatives finds an item only when every alternative is that item; cooking takes nothing for it", () => {
+  const data = {
+    items: itemsOf(["Linzen", "Kikkererwten", "Kippenbouillon", "Groentebouillon", "Kip", "Water"]),
+    aliases: { "alias-lens": { id: "alias-lens", item_id: "item-linzen", name: "Bruine linzen", name_key: "bruine linzen", deleted_at: null } },
+  };
+  assert.equal(named(data, "linzen of kikkererwten"), null, "two different items: nothing");
+  assert.equal(named(data, "kippenbouillon, groentebouillon of water"), null);
+  assert.equal(named(data, "linzen of rode bonen"), null, "one alternative unknown: nothing");
+  assert.equal(named(data, "kippen- of runderbouillon"), null, "a half word never resolves (kippen- is no Kip)");
+  assert.equal(named(data, "linzen en/of kikkererwten"), null);
+  assert.equal(named(data, "bruine linzen of linzen"), "Linzen", "every alternative is the same item");
+  assert.equal(named(data, "ei, losgeklopt met een scheutje melk of water"), null, "no Eieren here; the of is in the note, not an alternative");
+  assert.equal(named(HOUSE, "ei, losgeklopt met een scheutje melk of water"), "Eieren");
+  assert.deepEqual(listTargets("linzen of kikkererwten", data).map((t) => [t.item, t.title]), [[null, "linzen of kikkererwten"]], "on the list as its own words, no item");
+  const kitchen = {
+    items: data.items, aliases: data.aliases, pantry_events: {},
+    pantry: {
+      "p-linzen": { id: "p-linzen", item_id: "item-linzen", title: "Linzen", amount: 2, taken: 0, pack_size: "", added_on: DAY, use_by: null, deleted_at: null },
+      "p-kikker": { id: "p-kikker", item_id: "item-kikkererwten", title: "Kikkererwten", amount: 2, taken: 0, pack_size: "", added_on: DAY, use_by: null, deleted_at: null },
+    },
+  };
+  const takes = (line) => cookTakes({ recipe: { id: "recipe-alt-0001", ingredients: [p(line)] }, data: kitchen, today: DAY }).map((t) => t.pantry_id);
+  assert.deepEqual(takes("1 blik linzen of kikkererwten"), [], "one of two: nothing taken");
+  assert.deepEqual(takes("1 blik bruine linzen of linzen"), ["p-linzen"], "both the same item: taken");
+});
+
+test("apostrophe plurals, ripe and finely cut, and generic oil", () => {
+  const data = { items: itemsOf(["Mango", "Knoflook", "Pita", "Olie"]), aliases: {} };
+  assert.equal(named(data, "mango's"), "Mango");
+  assert.equal(named(data, "mango’s"), "Mango", "a curly apostrophe too");
+  assert.equal(named(data, "grote pita's"), "Pita");
+  assert.equal(named(data, "mango's, eetrijp"), "Mango");
+  assert.equal(named(data, "mango, rijp"), "Mango");
+  assert.equal(named(data, "knoflook, fijngesneden"), "Knoflook");
+  assert.equal(named(data, "knoflook fijngesneden"), "Knoflook");
+  assert.equal(named(data, "knoflook, gesnipperd"), "Knoflook");
+  assert.deepEqual([p("2 teentjes knoflook, fijngesneden").name, p("2 teentjes knoflook, fijngesneden").note], ["knoflook", "fijngesneden"]);
+  assert.equal(named(data, "plantaardige olie"), null, "a generic oil is left alone, never forced onto Olie");
+});
+
 test("what goes on the list: the item's name, salt and pepper as two lines, unknown names without their preparation", () => {
   assert.deepEqual(listTargets("wit patentbloem", HOUSE).map((t) => t.title), ["Bloem"]);
   assert.deepEqual(listTargets("zout en peper", HOUSE).map((t) => t.title), ["Zout", "Peper"]);
