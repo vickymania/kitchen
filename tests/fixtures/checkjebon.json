@@ -1,0 +1,219 @@
+[
+ {
+  "n": "ah",
+  "u": "https://www.ah.nl/producten/product/",
+  "c": "AH",
+  "i": "https://static.ah.nl/ah-static/images/ah-ui-bridge-components/logo/logo-ah.svg",
+  "d": [
+   {
+    "n": "Groenhof Spruitjes extra fijn",
+    "l": "wi473073/groenhof-spruitjes-extra-fijn",
+    "p": 16.65,
+    "s": "0,75 l"
+   },
+   {
+    "n": "AH Goudse belegen plakken",
+    "l": "wi2600/ah-goudse-jong-48-plakken",
+    "p": 2.95,
+    "s": "190 g"
+   },
+   {
+    "n": "AH Houdbare volle melk",
+    "l": "wi450535/ah-houdbare-volle-melk",
+    "p": 1.29,
+    "s": "1 l"
+   },
+   {
+    "n": "Dr. Oetker Big Americans pizza Hawaii",
+    "l": "wi62760/dr-oetker-big-americans-pizza-hawaii",
+    "p": 4.99,
+    "s": "460 g"
+   },
+   {
+    "n": "Crispy's Hamka's original",
+    "l": "wi506602/lay-s-hamka-s-original",
+    "p": 2.09,
+    "s": "125 g"
+   }
+  ]
+ },
+ {
+  "n": "aldi",
+  "u": "https://www.aldi.nl/producten/",
+  "c": "ALDI",
+  "i": "https://s7g10.scene7.com/is/image/aldinord/ALDI_Nord_Logo_2021_sRGB-7",
+  "d": []
+ },
+ {
+  "n": "dekamarkt",
+  "u": "https://www.dekamarkt.nl/boodschappen/x/x/x/",
+  "c": "DekaMarkt",
+  "i": "https://d3r3h30p75xj6a.cloudfront.net/static-images/deka/web/favicon.svg",
+  "d": []
+ },
+ {
+  "n": "dirk",
+  "u": "https://www.dirk.nl/boodschappen/x/x/x/",
+  "c": "Dirk",
+  "i": "https://d3r3h30p75xj6a.cloudfront.net/static-images/dirk/web/app_icon.png",
+  "d": [
+   {
+    "n": "Bio+ Biologische houdbare volle melk",
+    "l": "44838",
+    "p": 1.39,
+    "s": "1 liter"
+   },
+   {
+    "n": "Clipper Kruidenthee chamomile peach bio 20 zk.",
+    "l": "109127",
+    "p": 3.59,
+    "s": "30 g"
+   },
+   {
+    "n": "Crispy's Bugles naturel",
+    "l": "59507",
+    "p": 2.15,
+    "s": "125 g"
+   },
+   {
+    "n": "Crispy's Hamka's",
+    "l": "72030",
+    "p": 1.49,
+    "s": "125 g"
+   },
+   {
+    "n": "Groenhof light spruitjes",
+    "l": "32991",
+    "p": 6.29,
+    "s": "6 x 250 ml"
+   }
+  ]
+ },
+ {
+  "n": "ekoplaza",
+  "u": "https://www.ekoplaza.nl/producten/product/",
+  "c": "Ekoplaza",
+  "i": "https://www.ekoplaza.nl/_nuxt/icons/icon_512x512.b09884.png",
+  "d": []
+ },
+ {
+  "n": "hoogvliet",
+  "u": "https://www.hoogvliet.com/product/",
+  "c": "Hoogvliet",
+  "i": "https://www.hoogvliet.com/INTERSHOP/static/WFS/org-webshop-Site/-/-/nl_NL/img/smart_banner_icon.png",
+  "d": [
+   {
+    "n": "Dr. Oetker Big americans hawaii",
+    "l": "dr-oetker-big-americans-hawaii",
+    "p": 4.99,
+    "s": "460 gram"
+   },
+   {
+    "n": "Crispy's Hamka's",
+    "l": "lay-apos-s-hamka-s",
+    "p": 1.79,
+    "s": "125 gram"
+   },
+   {
+    "n": "Crispy's Hamka`s partypack",
+    "l": "lay-apos-s-hamka-s-partypack",
+    "p": 2.44,
+    "s": "170 gram"
+   }
+  ]
+ },
+ {
+  "n": "jumbo",
+  "u": "https://www.jumbo.com/producten/",
+  "c": "Jumbo",
+  "i": "https://www.jumbo.com/INTERSHOP/static/WFS/Jumbo-Grocery-Site/-/-/nl_NL/images/favicon.ico",
+  "d": [
+   {
+    "n": "Dr. Oetker Big Americans Pizza Hawaii 460 g",
+    "l": "dr-oetker-big-americans-pizza-hawaii-460-g-184178DS",
+    "p": 4.99,
+    "s": ""
+   },
+   {
+    "n": "Jumbo Houdbare Volle Melk 1 L",
+    "l": "jumbo-houdbare-volle-melk-1-l-49608STK",
+    "p": 0.99,
+    "s": "1 L"
+   },
+   {
+    "n": "Crispy's Hamka's Chips 125 gr",
+    "l": "lay-s-hamka-s-chips-125-gr-451800ZK",
+    "p": 1.99,
+    "s": "125 Gram"
+   },
+   {
+    "n": "Crispy's Hamka's Chips 185 gr",
+    "l": "lay-s-hamka-s-chips-185-gr-748207ZK",
+    "p": 2.92,
+    "s": "185 Gram"
+   }
+  ]
+ },
+ {
+  "n": "lidl",
+  "u": "https://boodschaapje.nl/product/",
+  "c": "Lidl (via boodschaapje.nl)",
+  "i": "https://www.lidl.nl/static/assets/1f8d040c-8532-4af5-9c99-7a59545365de.svg",
+  "d": [
+   {
+    "n": "(Vlies) filterzakken-0514864",
+    "l": "8128671",
+    "p": 6.99,
+    "s": ""
+   }
+  ]
+ },
+ {
+  "n": "plus",
+  "u": "https://www.plus.nl/product/",
+  "c": "PLUS",
+  "i": "https://play-lh.googleusercontent.com/oIetxLUcZLIA_VrAGWmpLrBy6UHs0bAJNESA3IOg2nNGoq4zHSrUbEdj6fDOZk7NaPw",
+  "d": [
+   {
+    "n": "Crispys Crispy's Hamka's 125gr",
+    "l": "crispys-lay-s-hamka-s-125gr-zak-125-g-394281",
+    "p": 1.79,
+    "s": "Per 125 g"
+   },
+   {
+    "n": "PLUS Goudse belegen plakken",
+    "l": "plus-goudse-jong-48-plakken-tray-190-g-140291",
+    "p": 2.95,
+    "s": "Per 190 g"
+   }
+  ]
+ },
+ {
+  "n": "poiesz",
+  "u": "https://webwinkel.poiesz-supermarkten.nl/boodschappen/producten/",
+  "c": "Poiesz",
+  "i": "https://webwinkel.poiesz-supermarkten.nl/apple-touch-icon.png",
+  "d": []
+ },
+ {
+  "n": "spar",
+  "u": "https://www.spar.nl/",
+  "c": "SPAR",
+  "i": "https://www.spar.nl/Content/img/favicon/android-icon-192x192.png",
+  "d": [
+   {
+    "n": "Crispy's Crispy's Chips Hamka's",
+    "l": "crispy's-crispy's-chips-hamka's-9259513/",
+    "p": 2.29,
+    "s": "185 Gram"
+   }
+  ]
+ },
+ {
+  "n": "vomar",
+  "u": "https://www.vomar.nl/producten/",
+  "c": "Vomar",
+  "i": "https://www.vomar.nl/apple-touch-icon.png",
+  "d": []
+ }
+]

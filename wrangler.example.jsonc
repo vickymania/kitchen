@@ -1,0 +1,46 @@
+// Copy to wrangler.jsonc and fill in your own ids and host names (see README.md).
+{
+  // One worker for both apps; the host name picks the page (worker/index.js).
+  "name": "vexed-kitchen",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    // The worker answers every request first: "/" depends on the host, and
+    // /api and /photos need the device check.
+    "run_worker_first": true,
+    // Serve /recipes.html as itself, no redirect to /recipes.
+    "html_handling": "none"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "kitchen", "database_id": "<your-d1-database-id>", "migrations_dir": "migrations" }
+  ],
+  "kv_namespaces": [
+    { "binding": "PHOTOS", "id": "<your-kv-namespace-id>" }
+  ],
+  "routes": [
+    { "pattern": "recipes.example.com", "custom_domain": true },
+    { "pattern": "groceries.example.com", "custom_domain": true }
+  ],
+  // tools/deploy.mjs replaces this with the git commit on every deploy.
+  "vars": { "BUILD_ID": "dev" },
+  "observability": { "enabled": true },
+  "env": {
+    // `wrangler dev --env dev`: no routes, so the worker sees the real host
+    // (recipes.localhost / groceries.localhost). With the routes above, dev
+    // hands every request over as recipes.example.com and both hosts get the
+    // recipes page. Routes ARE inherited, so they are emptied here; bindings
+    // are not, so they are repeated.
+    "dev": {
+      "routes": [],
+      "d1_databases": [
+        { "binding": "DB", "database_name": "kitchen", "database_id": "<your-d1-database-id>", "migrations_dir": "migrations" }
+      ],
+      "kv_namespaces": [
+        { "binding": "PHOTOS", "id": "<your-kv-namespace-id>" }
+      ],
+      "vars": { "BUILD_ID": "dev" }
+    }
+  }
+}

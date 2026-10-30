@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One open line. Only the circle ticks it off; the × on the right (1.6) takes it off the list; a tap on the rest opens its details in place. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:orientation="horizontal"
+        android:paddingEnd="4dp">
+
+        <!-- 48dp of touch area around the 22dp ring. -->
+        <ImageView
+            android:id="@+id/tick"
+            android:layout_width="52dp"
+            android:layout_height="48dp"
+            android:contentDescription="@string/widget_tick"
+            android:paddingStart="16dp"
+            android:paddingTop="13dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="13dp"
+            android:src="@drawable/check_ring" />
+
+        <LinearLayout
+            android:id="@+id/body"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/ink"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/amount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:fontFamily="monospace"
+                    android:maxLines="1"
+                    android:textColor="@color/mute"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Collapsed: one short line, where to buy it and an offer tag. -->
+            <TextView
+                android:id="@+id/sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:textColor="@color/mute"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <!-- Expanded: every detail, and the way into the app. -->
+            <TextView
+                android:id="@+id/details"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp"
+                android:textColor="@color/ink"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/open_entry"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:fontFamily="monospace"
+                android:gravity="center_vertical"
+                android:letterSpacing="0.08"
+                android:text="@string/widget_open_entry"
+                android:textColor="@color/signal"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- 44dp wide and the row's 48dp high, away from the circle on the left. -->
+        <TextView
+            android:id="@+id/remove"
+            android:layout_width="44dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top"
+            android:contentDescription="@string/widget_remove"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:text="×"
+            android:textColor="@color/mute"
+            android:textSize="22sp" />
+    </LinearLayout>
+</LinearLayout>

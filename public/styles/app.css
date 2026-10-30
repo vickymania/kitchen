@@ -1,0 +1,636 @@
+/* recipes.vexed.works and groceries.vexed.works.
+   Built from the parts of vexed.works (code.html): the same tokens and fonts,
+   the registration marks, the topbar, the mono eyebrow, the huge uppercase
+   title with the red dot, the signal strip and the numbered ruled rows.
+   Fonts are served from this site (SIL Open Font License). */
+@font-face{font-family:'Chakra Petch';font-weight:400;font-display:swap;src:url(/fonts/chakra-petch-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Chakra Petch';font-weight:400;font-display:swap;src:url(/fonts/chakra-petch-400-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Chakra Petch';font-weight:500;font-display:swap;src:url(/fonts/chakra-petch-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Chakra Petch';font-weight:500;font-display:swap;src:url(/fonts/chakra-petch-500-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Chakra Petch';font-weight:600;font-display:swap;src:url(/fonts/chakra-petch-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Chakra Petch';font-weight:600;font-display:swap;src:url(/fonts/chakra-petch-600-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Chakra Petch';font-weight:700;font-display:swap;src:url(/fonts/chakra-petch-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Chakra Petch';font-weight:700;font-display:swap;src:url(/fonts/chakra-petch-700-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Share Tech Mono';font-weight:400;font-display:swap;src:url(/fonts/share-tech-mono-400-latin.woff2) format('woff2')}
+
+/* Dark is the default (28-10-2026: "ik kan echt niet naar dat wit
+   kijken"), so a page that has not run public/app/theme.js yet never flashes
+   white. data-theme="light", or "system" on a light phone, swaps the tokens. */
+:root{
+  color-scheme:dark;
+  --paper:#0B0D10;
+  --panel:#171A1F;
+  --ink:#E9ECEF;
+  --ink-hover:#C9CED4;
+  --on-ink:#0B0D10;
+  --mute:#8A93A0;
+  --body:#C5CBD3;
+  --rule:#2A2F36;
+  --signal:#E0263F;
+  --shade:0,0,0;
+  --gut:clamp(16px,4.5vw,64px);
+  --top:54px;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --paper:#FFFFFF;--panel:#F1F3F5;--ink:#0B0D10;--ink-hover:#262A30;--on-ink:#FFFFFF;
+  --mute:#79828F;--body:#2C3138;--rule:#D3D8DE;--signal:#C8152C;--shade:11,13,16;
+}
+@media (prefers-color-scheme:light){
+  :root[data-theme="system"]{
+    color-scheme:light;
+    --paper:#FFFFFF;--panel:#F1F3F5;--ink:#0B0D10;--ink-hover:#262A30;--on-ink:#FFFFFF;
+    --mute:#79828F;--body:#2C3138;--rule:#D3D8DE;--signal:#C8152C;--shade:11,13,16;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:calc(var(--top) + 12px)}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Chakra Petch",system-ui,sans-serif;font-weight:400;font-size:16px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
+  padding-bottom:env(safe-area-inset-bottom)}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--signal);outline-offset:3px}
+[hidden]{display:none!important}
+.mono{font-family:"Share Tech Mono",ui-monospace,monospace;font-weight:500;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;line-height:1.4}
+.mute{color:var(--mute)}
+.sig{color:var(--signal)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* the page presents itself as a technical drawing */
+.reg{position:fixed;width:22px;height:22px;pointer-events:none;z-index:60;border-color:var(--ink);opacity:.45}
+.reg.tl{top:14px;left:14px;border-left:1px solid;border-top:1px solid}
+.reg.tr{top:14px;right:14px;border-right:1px solid;border-top:1px solid}
+.reg.bl{bottom:14px;left:14px;border-left:1px solid;border-bottom:1px solid}
+.reg.br{bottom:14px;right:14px;border-right:1px solid;border-bottom:1px solid}
+@media(max-width:760px){.reg{display:none}}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 var(--gut)}
+
+/* ------------------------------------------------------------ topbar */
+.topbar{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:1px solid var(--rule);
+  padding-top:env(safe-area-inset-top)}
+.topbar .wrap{display:flex;align-items:center;gap:12px;height:var(--top)}
+.topbar .mark{width:17px;height:17px;flex:0 0 auto;color:var(--ink)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.wordmark{font-weight:700;font-size:17px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.topnav{margin-left:auto;display:flex;gap:18px;align-items:center}
+.topnav a{color:var(--mute);transition:color .18s;padding:10px 0}
+.topnav a:hover{color:var(--ink)}
+.topnav a[aria-current]{color:var(--ink);border-bottom:2px solid var(--signal);padding-bottom:8px}
+.topnav .gear{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin-right:-11px;padding:0}
+.topnav .gear svg{width:21px;height:21px;display:block}
+/* On a phone the wordmark already says where you are; the nav only offers the other app. */
+@media(max-width:560px){.topnav a[data-nav][aria-current]{display:none}}
+
+/* -------------------------------------------------------------- hero */
+.hero{padding-top:clamp(26px,6vw,80px)}
+.eyebrow{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--mute);margin-bottom:clamp(14px,3vw,30px)}
+.eyebrow b{color:var(--ink);font-weight:500}
+.eyebrow .sig{color:var(--signal)}
+h1{font-weight:700;font-size:clamp(46px,13.5vw,176px);line-height:.84;letter-spacing:-.022em;
+  text-transform:uppercase;margin:0;overflow-wrap:anywhere}
+h1 .dot{color:var(--signal)}
+h1.long{font-size:clamp(34px,9vw,112px);line-height:.9;hyphens:auto;overflow-wrap:break-word}
+h2{font-weight:700;text-transform:uppercase;font-size:clamp(24px,4.4vw,48px);line-height:.9;margin:0}
+.section-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  border-top:1px solid var(--ink);padding-top:clamp(18px,3vw,30px);margin:clamp(30px,5vw,56px) 0 clamp(14px,2.4vw,24px)}
+.section-head .note{color:var(--mute);margin-left:auto}
+
+/* signal strip: here it reads out how far the list is */
+.signal-strip{margin:clamp(20px,4vw,40px) 0 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.signal-strip .wrap{display:flex;align-items:center;gap:0;height:58px}
+.sig-label{flex:0 0 auto;color:var(--mute);padding-right:16px;white-space:nowrap}
+.sig-bar{flex:1 1 auto;height:2px;background:var(--rule);position:relative;min-width:0}
+.sig-bar i{position:absolute;left:0;top:-1px;height:4px;background:var(--signal);transition:width .35s ease}
+.sig-readout{flex:0 0 auto;color:var(--ink);padding-left:16px;margin-left:16px;white-space:nowrap;
+  border-left:1px solid var(--rule);height:100%;display:flex;align-items:center}
+
+/* ----------------------------------------------------------- controls */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;
+  border:1px solid var(--ink);background:var(--paper);color:var(--ink);cursor:pointer;
+  font:500 12px/1 "Share Tech Mono",ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;
+  transition:background .15s,color .15s}
+.btn:hover{background:var(--panel)}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.primary:hover{background:var(--ink-hover)}
+.btn.signal{background:var(--signal);border-color:var(--signal);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;padding:0 10px}
+.btn.ghost:hover{background:var(--panel)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn svg{width:16px;height:16px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:clamp(18px,3vw,28px) 0}
+.actions .grow{flex:1 1 auto}
+
+label.field{display:block;margin:0 0 18px}
+label.field>span{display:block;color:var(--mute);margin-bottom:6px}
+input,textarea,select{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule);border-radius:0;padding:11px 12px;width:100%;min-height:44px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--ink)}
+textarea{min-height:140px;resize:vertical;line-height:1.5}
+input[type=checkbox]{width:auto;min-height:0}
+.hint{color:var(--mute);font-size:14px;margin:-8px 0 18px}
+
+.search{display:flex;gap:10px;margin:clamp(18px,3vw,28px) 0 0}
+.search input{flex:1 1 auto}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 0}
+.filters .btn{padding:0 4px}
+.chip{min-height:36px;padding:4px 12px;border:1px solid var(--ink);background:var(--panel);color:var(--ink);
+  font:inherit;font-size:14px;cursor:pointer;box-shadow:inset 0 -2px 0 var(--signal)}
+.filter-group{margin:0 0 16px}
+.filter-group .label{color:var(--mute);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px}
+
+/* ---------------------------------------------------- the ruled rows */
+.rows{border-top:1px solid var(--rule);margin:0;padding:0;list-style:none}
+.row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:4px 14px;align-items:center;
+  padding:14px 0;border-bottom:1px solid var(--rule);transition:background .16s,padding-left .16s}
+.row:hover,.row:focus-visible{background:var(--panel);padding-left:8px}
+.row .idx{color:var(--mute);align-self:start;padding-top:5px}
+.row .ttl{font-weight:700;text-transform:uppercase;font-size:clamp(18px,2.4vw,28px);line-height:1.05;overflow-wrap:anywhere}
+.row .meta{grid-column:2;color:var(--mute);font-size:14px;line-height:1.3}
+.row .st{grid-column:3;grid-row:1/span 2;color:var(--mute)}
+.row .thumb{width:58px;height:58px;object-fit:cover;display:block;border:1px solid var(--rule);background:var(--panel)}
+.empty{color:var(--mute);padding:22px 0;border-bottom:1px solid var(--rule)}
+
+/* ------------------------------------------------------------ recipe */
+.back{display:inline-block;color:var(--mute);padding:12px 0 0}
+.back:hover{color:var(--ink)}
+.photo{margin:clamp(18px,3vw,30px) 0 0}
+.photo img{width:100%;max-height:62vh;object-fit:cover;display:block;border:1px solid var(--rule);background:var(--panel)}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--ink)}
+.stepper button{width:44px;height:44px;border:0;background:var(--paper);font:500 20px/1 "Share Tech Mono",monospace;cursor:pointer}
+.stepper button:hover{background:var(--panel)}
+.stepper output{min-width:96px;text-align:center;padding:0 6px}
+.facts{display:flex;flex-wrap:wrap;align-items:center;gap:12px 22px;margin:clamp(16px,3vw,26px) 0}
+/* The wizard labels on the recipe page: meal, main ingredient, cuisine, time. */
+.recipe-labels{display:flex;flex-wrap:wrap;gap:6px 8px;margin:-6px 0 14px;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.recipe-labels span{border:1px solid var(--rule);padding:4px 8px;color:var(--mute)}
+.ings{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.ings li{display:grid;grid-template-columns:minmax(76px,30%) minmax(0,1fr);gap:14px;padding:11px 0;border-bottom:1px solid var(--rule);align-items:baseline}
+.ings .q{font-family:"Share Tech Mono",monospace;font-size:15px;text-align:right;color:var(--ink);white-space:nowrap}
+.ings .n{font-size:17px}
+.ings .n small{display:block;color:var(--mute);font-size:14px}
+.ings li.head{display:block;border-bottom:1px solid var(--ink);padding-top:22px;color:var(--ink)}
+.ings .opt{color:var(--mute)}
+.steps{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule);counter-reset:step}
+.steps li{display:grid;grid-template-columns:40px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid var(--rule);font-size:17px;color:var(--body)}
+.steps li::before{counter-increment:step;content:counter(step,decimal-leading-zero);font:500 11px/1.9 "Share Tech Mono",monospace;letter-spacing:.14em;color:var(--mute)}
+.notes{white-space:pre-line;color:var(--body);font-size:17px;max-width:62ch}
+.two{display:grid;grid-template-columns:minmax(0,1fr);gap:0 clamp(28px,5vw,72px)}
+@media(min-width:900px){.two{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}}
+
+/* ------------------------------------------------------------ groceries */
+.add{display:flex;gap:10px;margin:clamp(18px,3vw,28px) 0 clamp(16px,2.5vw,24px)}
+.add input{flex:1 1 auto}
+.add .btn{width:52px;padding:0;font-size:22px}
+.entries{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.entry{display:grid;grid-template-columns:44px minmax(0,1fr) auto 40px;gap:2px 10px;align-items:center;
+  border-bottom:1px solid var(--rule);min-height:62px;padding:8px 0;cursor:pointer;user-select:none}
+.entry:hover{background:var(--panel)}
+.box{width:26px;height:26px;border:1.5px solid var(--ink);display:grid;place-items:center;margin-left:6px;transition:background .15s}
+.box svg{width:16px;height:16px;opacity:0;color:#fff}
+.entry[aria-checked=true] .box{background:var(--signal);border-color:var(--signal)}
+.entry[aria-checked=true] .box svg{opacity:1}
+.entry .ttl{font-weight:700;text-transform:uppercase;font-size:clamp(18px,2.2vw,24px);line-height:1.1;overflow-wrap:anywhere}
+.entry .amt{font-family:"Share Tech Mono",monospace;font-size:15px;white-space:nowrap;text-align:right}
+.entry .meta{grid-column:2/4;color:var(--mute);font-size:14px;line-height:1.3}
+.entry .more{grid-column:4;grid-row:1/span 2;width:40px;height:44px;border:0;background:transparent;cursor:pointer;color:var(--mute)}
+.entry .more:hover{color:var(--ink)}
+.entry[aria-checked=true] .ttl{text-decoration:line-through;text-decoration-color:var(--signal);text-decoration-thickness:2px;color:var(--mute)}
+.cart>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:14px;
+  border-top:1px solid var(--ink);padding:clamp(18px,3vw,26px) 0 14px;margin-top:clamp(28px,5vw,48px)}
+.cart>summary::-webkit-details-marker{display:none}
+.cart>summary h2::after{content:" +";color:var(--signal)}
+.cart[open]>summary h2::after{content:" \2212"}
+
+/* ------------------------------------------------------------- sheet */
+dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:640px;max-height:92vh;
+  background:var(--paper);color:var(--ink);border-top:3px solid var(--signal);box-shadow:0 -10px 40px rgba(var(--shade),.18)}
+dialog.sheet::backdrop{background:rgba(var(--shade),.6)}
+@media(min-width:700px){dialog.sheet{margin:auto;border:1px solid var(--ink);border-top:3px solid var(--signal)}}
+.sheet-in{padding:22px var(--gut) calc(22px + env(safe-area-inset-bottom));overflow:auto;max-height:92vh}
+.sheet-in h2{margin-bottom:14px}
+.picklist{list-style:none;margin:0 0 6px;padding:0;border-top:1px solid var(--rule)}
+.picklist label{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule);cursor:pointer}
+.picklist input{width:22px;height:22px;accent-color:var(--signal)}
+.picklist .q{font-family:"Share Tech Mono",monospace;color:var(--mute);white-space:nowrap}
+.picklist .head{padding:16px 0 6px;color:var(--ink);border-bottom:1px solid var(--ink)}
+.code{font:500 clamp(44px,14vw,72px)/1 "Share Tech Mono",monospace;letter-spacing:.12em;margin:10px 0 6px}
+
+/* ------------------------------------------------------------- toast */
+#toasts{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom));z-index:90;display:grid;justify-items:center;gap:8px;pointer-events:none;padding:0 var(--gut)}
+.toast{pointer-events:auto;background:var(--ink);color:var(--paper);display:flex;align-items:center;gap:14px;
+  padding:12px 16px;max-width:560px;width:100%;box-shadow:0 8px 28px rgba(var(--shade),.25)}
+.toast span{flex:1 1 auto}
+.toast a,.toast button{color:var(--paper);background:none;border:0;border-bottom:2px solid var(--signal);padding:4px 0;cursor:pointer;font:inherit}
+.toast.error{background:var(--signal)}
+.toast.error a,.toast.error button{border-bottom-color:#fff}
+
+/* -------------------------------------------------------------- cook */
+body.cooking .topbar,body.cooking .reg{display:none}
+/* Only top and bottom: the side gutter comes from .wrap. A shorthand padding
+   here put the step text against the screen edge. */
+.cook{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.cook-top{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--rule);min-height:var(--top)}
+.cook-top .title{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cook-main{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;padding:28px 0}
+.cook-count{color:var(--signal);margin-bottom:16px}
+.cook-step{font-weight:500;font-size:clamp(24px,6vw,46px);line-height:1.22;margin:0;max-width:30ch}
+.timers-found{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.running{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rule)}
+.timer{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--rule);min-height:52px}
+.timer .left{font:500 26px/1 "Share Tech Mono",monospace;letter-spacing:.06em;min-width:96px}
+.timer .lbl{flex:1 1 auto;color:var(--mute);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.timer.done{background:var(--signal);color:#fff;animation:pulse 1s steps(2) infinite}
+.timer.done .lbl{color:#fff}
+@keyframes pulse{50%{background:var(--ink)}}
+.cook-nav{display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:14px 0}
+.cook-nav .btn{min-height:64px;font-size:14px}
+.cook-ings{border-top:1px solid var(--rule);padding-top:10px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ------------------------------------------------------------ editor */
+.preview-ings{list-style:none;margin:-6px 0 22px;padding:0;font-size:14px;color:var(--mute)}
+.preview-ings li{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;border-bottom:1px dashed var(--rule);padding:4px 0}
+.preview-ings .q{font-family:"Share Tech Mono",monospace;color:var(--ink)}
+.preview-ings .head{display:block;color:var(--ink);font-weight:600}
+.photo-pick{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.photo-pick img{width:96px;height:96px;object-fit:cover;border:1px solid var(--rule)}
+.danger-zone{border-top:1px solid var(--rule);margin-top:36px;padding-top:18px}
+
+/* ---------------------------------------------------------- settings */
+.settings section{margin-bottom:8px}
+.kv{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.kv li{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--rule)}
+.kv li .grow{flex:1 1 auto;min-width:0}
+.kv li small{display:block;color:var(--mute)}
+.pair{max-width:520px}
+.pair .code-input{font:500 32px/1 "Share Tech Mono",monospace;letter-spacing:.3em;text-align:center}
+footer.foot{margin:72px 0 40px;color:var(--mute)}
+
+/* ---------------------------------------------- groceries tabs (phase 2) */
+.tabs{border-bottom:1px solid var(--rule)}
+.tabs .wrap{display:flex;align-items:center;gap:22px;min-height:52px}
+.tab{color:var(--mute);padding:14px 0 12px;border-bottom:2px solid transparent}
+.tab:hover{color:var(--ink)}
+.tab[aria-current]{color:var(--ink);border-bottom-color:var(--signal)}
+.tabs .receipt-btn{margin-left:auto;margin-right:-10px}
+.hint.top{margin:clamp(18px,3vw,28px) 0 14px}
+.entry .prod{grid-column:2/4;font-size:13px;color:var(--ink);padding:2px 0;justify-self:start;
+  border-bottom:1px solid var(--signal);overflow-wrap:anywhere}
+/* A deal on an open line (phase 3): quiet, one line, the store in ink. */
+.entry .deal{grid-column:2/4;font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);padding-top:2px;overflow-wrap:anywhere}
+.entry .deal b{font-weight:500;color:var(--ink);border-bottom:1px solid var(--signal)}
+/* Product knowledge (28-10-2026): why this product, its price there, and an
+   offer on his own product said first and in ink. */
+.entry .prod .why,.entry .prod .prod-price{color:var(--mute)}
+.entry .cheaper{grid-column:2/4;font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);padding-top:2px}
+.entry .cheaper b{font-weight:500;color:var(--ink)}
+.entry .deal.mine{color:var(--ink)}
+.entry .deal .deal-tag{color:var(--signal)}
+/* "Alleen bij deze winkel" (28-10-2026): the store to get it from, in ink with
+   the signal mark; such lines sit under "Andere winkel: Lidl" when another
+   store is chosen. */
+.entry .only-at{grid-column:2/4;font-size:12px;line-height:1.35;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);padding-top:2px}
+.entry .only-at::before{content:"";display:inline-block;width:6px;height:6px;background:var(--signal);margin-right:8px;vertical-align:1px}
+.away h3.sub{font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.store-only{margin:clamp(14px,2.4vw,22px) 0 0;border-top:1px solid var(--rule)}
+.store-only .field{margin-top:12px}
+/* "Ik ben bij...": one quiet row above the add box; a chosen store is marked. */
+.shop{display:flex;align-items:center;gap:12px;margin:clamp(14px,2.4vw,22px) 0 0;color:var(--mute)}
+.shop>span{flex:0 0 auto;white-space:nowrap}
+.shop select{flex:1 1 auto;min-width:0;max-width:280px;min-height:40px;padding:7px 10px;font-size:15px}
+.shop select.set{border-color:var(--ink);box-shadow:inset 0 -3px 0 var(--signal);color:var(--ink)}
+.shop+.add{margin-top:12px}
+/* The preference sheet: store and recipe, then the candidates with everyone's stars. */
+.scope{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
+@media(min-width:560px){.scope{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hint.now{margin:-6px 0 12px;color:var(--ink);font-size:13px}
+.cands label{grid-template-columns:30px minmax(0,1fr)}
+.cand{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.cand small{font-size:13px}
+/* "Product voor dit recept" under an ingredient. */
+.pp{display:block;border:0;background:transparent;padding:4px 0 0;margin:0;color:var(--mute);font-size:12px;
+  letter-spacing:.04em;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.pp:hover,.pp.set{color:var(--ink)}
+.pp.set{text-decoration:underline;text-decoration-color:var(--signal);text-underline-offset:3px}
+.rproducts{margin-top:8px}
+.picklist .rprod{display:flex;flex-direction:column;padding:10px 0;border-bottom:1px solid var(--rule)}
+.entry.again{cursor:pointer}
+.entry.again .box{font:500 18px/1 "Share Tech Mono",monospace;color:var(--ink)}
+.entry.again.due .box{border-color:var(--signal);color:var(--signal)}
+.entry.again.due .amt{color:var(--signal)}
+.entry.again[aria-disabled=true]{cursor:default}
+.entry.again[aria-disabled=true] .ttl{color:var(--mute)}
+.entry.again .meta{grid-column:2/5}
+.again-hide,.again-toggle{border:0;background:transparent;color:var(--mute);font-size:12px;letter-spacing:.04em;cursor:pointer;min-height:44px;padding:0 4px;text-align:left}
+.again-hide{grid-column:2/5;justify-self:start;min-height:32px}
+.again-hide:hover,.again-toggle:hover{color:var(--ink);text-decoration:underline}
+.again-toggle{display:block;margin:18px 0 6px}
+/* The pantry ("Voorraad"): the amount in the box, what is due marked in signal, three taps per row. */
+.entry.stock{cursor:default;align-items:start;grid-template-columns:58px minmax(0,1fr) auto 40px}
+.entry.stock:hover{background:transparent}
+.entry.stock .amt-box{width:auto;min-width:30px;padding:0 4px;margin-top:2px;font-size:15px;color:var(--ink)}
+.entry.stock .meta{grid-column:2/5}
+.entry.stock.soon .amt-box{border-color:var(--signal)}
+.entry.stock.late .amt-box{border-color:var(--signal);background:var(--signal);color:#fff}
+.stock-acts{grid-column:2/5;display:flex;flex-wrap:wrap;gap:4px 6px;margin:6px 0 2px -10px}
+.stock-acts .btn{min-height:36px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.stock-acts .btn:hover{color:var(--ink)}
+/* "Op tijd opmaken" above the list: one line to the pantry tab, only while something is due. */
+.use-up{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;
+  margin:clamp(14px,2.4vw,22px) 0 0;padding:10px 12px;border-left:3px solid var(--signal);background:var(--panel);color:var(--ink)}
+.use-up-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--signal)}
+.use-up-names{grid-column:1;font-size:15px;line-height:1.3;overflow-wrap:anywhere}
+.use-up-go{grid-column:2;grid-row:1/span 2;font-size:20px}
+.use-up:hover{background:var(--rule)}
+/* "Bijna op" above the list: per thing why, one tap onto the list, "niet nu" for today. */
+.low-strip{margin:clamp(14px,2.4vw,22px) 0 0;padding:10px 12px 6px;border-left:3px solid var(--signal);background:var(--panel);color:var(--ink)}
+.low-label{margin:0 0 4px;font-size:12px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--signal)}
+.low-strip ul{list-style:none;margin:0;padding:0}
+.low-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;align-items:center;padding:6px 0;border-top:1px solid var(--rule)}
+.low-row:first-child{border-top:0}
+.low-name{font-weight:700;text-transform:uppercase;font-size:16px;line-height:1.15;overflow-wrap:anywhere}
+.low-why{grid-column:1;font-size:12px;letter-spacing:.04em;color:var(--mute);line-height:1.35;overflow-wrap:anywhere}
+.low-acts{grid-column:2;grid-row:1/span 2;display:flex;gap:2px}
+.low-acts .btn,.low-more{min-height:36px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.low-acts .low-add{border-color:var(--ink);color:var(--ink)}
+.low-acts .low-later,.low-more{color:var(--mute)}
+.low-acts .low-later:hover,.low-more:hover{color:var(--ink)}
+.low-more{margin:2px 0 0 -10px}
+/* "… gekookt?": the same strip; three answers, so they wrap under the question. */
+.cook-ask .low-row{grid-template-columns:minmax(0,1fr)}
+.cook-ask .low-acts{grid-column:1;grid-row:auto;flex-wrap:wrap;margin:4px 0 0 -10px}
+@media(max-width:520px){
+  .low-row{grid-template-columns:minmax(0,1fr)}
+  .low-acts{grid-column:1;grid-row:auto;margin:4px 0 0 -10px}
+  .low-acts .low-add{margin-left:10px}
+}
+/* The Voorraad tab: a low row says so in the signal colour; "waarschuw onder…" is the quiet fourth tap. */
+.entry.stock.low .amt-box{box-shadow:inset 0 -3px 0 var(--signal)}
+.entry.stock .low-mark{grid-column:2/5;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--signal);line-height:1.35}
+.stock-acts .low-set{text-transform:none;letter-spacing:.02em}
+.low-off{display:flex;align-items:center;gap:10px;margin:-6px 0 14px;color:var(--ink)}
+.low-preview{min-height:2.6em}
+
+/* ------------------------------------------- deals and deal rules (28-10-2026) */
+/* Four tabs and the receipt button on a phone: a tighter gap, and the strip
+   scrolls sideways inside itself rather than pushing the page wider. */
+@media(max-width:520px){
+  .tabs .wrap{gap:14px;overflow-x:auto;scrollbar-width:none}
+  .tabs .wrap::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap}
+  .tabs .receipt-btn{flex:0 0 auto;margin-right:0}
+}
+.entry.deal-hit{cursor:default;align-items:start}
+.entry.deal-hit:hover{background:transparent}
+.entry.deal-hit .box{font:500 15px/1 "Share Tech Mono",monospace;color:var(--mute);margin-top:2px}
+.entry.deal-hit.rec .box{border-color:var(--signal);background:var(--signal);color:#fff}
+.entry.deal-hit .amt{font-size:17px;color:var(--ink)}
+.entry.deal-hit .deal,.entry.deal-hit .meta{grid-column:2/5}
+.entry.deal-hit .rec-why{grid-column:2/5;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--signal)}
+.entry.deal-hit .check-why{grid-column:2/5;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.entry.deal-hit .often-why{grid-column:2/5;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.entry.deal-hit.check .box{border-style:dashed}
+.entry.deal-hit .amt{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+/* The deeper the discount, the louder (Thomas: "hoe dieper de korting hoe liever"). */
+.disc{display:inline-block;font-size:12px;letter-spacing:.06em;line-height:1;padding:4px 6px 3px;border:1px solid var(--rule);color:var(--mute);
+  background:linear-gradient(90deg,var(--signal) var(--pct),transparent var(--pct)) left bottom/100% 2px no-repeat}
+.disc.mid{color:var(--ink);border-color:var(--ink)}
+.disc.deep{color:#fff;border-color:var(--signal);background:var(--signal)}
+.entry.deal-hit .detour-tag{color:var(--signal)}
+.stock-acts .on-list{display:inline-flex;align-items:center;cursor:default;border-color:var(--rule)}
+.deals-empty p{margin:0 0 10px;line-height:1.45}
+.deals-empty p:last-child{margin:0}
+.rule-opts{border-top:1px solid var(--rule);margin-bottom:12px}
+.rule-check{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;align-items:center;padding:12px 0 6px;cursor:pointer}
+.rule-check input{width:22px;height:22px;min-height:0;padding:0;accent-color:var(--signal)}
+.rule-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 0 12px 40px;border-bottom:1px solid var(--rule)}
+.rule-sub input{width:6.5em;min-height:40px}
+.rule-sub select{width:auto;min-height:40px}
+.rule-sub input:disabled,.rule-sub select:disabled{opacity:.45}
+.rule-opts>.rule-check:last-child{border-bottom:1px solid var(--rule);padding-bottom:12px}
+.rule-words{margin-bottom:12px}
+.rule-words .hint{display:block;margin:4px 0 0;font-size:13px}
+.rule-preview{min-height:2.6em}
+.rule-block .section-head{margin-top:clamp(28px,5vw,48px)}
+
+/* -------------------------------------------------- receipt review */
+.rhead{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px}
+.receipt-lines{margin-top:6px}
+.rline{padding:14px 0 6px;border-bottom:1px solid var(--rule)}
+.rline .field{margin-bottom:10px}
+.rline .field>span{font-size:11px;margin-bottom:4px}
+.rgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0 10px}
+.rgrid .field{grid-column:span 2}
+.rgrid .field.name{grid-column:span 4}
+.rgrid .field.item{grid-column:span 6}
+.rgrid input{min-height:40px;padding:6px 10px}
+.rgrid .num{font-family:"Share Tech Mono",monospace;text-align:right}
+.rline.minor{opacity:.75}
+.match{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;color:var(--mute);font-size:13px;min-height:28px}
+.match .keep{display:inline-flex;align-items:center;gap:8px;color:var(--ink);cursor:pointer}
+.match .keep input{width:20px;height:20px;accent-color:var(--signal)}
+.rline .remove{min-height:36px;font-size:12px;color:var(--mute);margin-left:-10px}
+@media(min-width:760px){
+  .rgrid{grid-template-columns:repeat(8,minmax(0,1fr))}
+  .rgrid .field{grid-column:span 1}
+  .rgrid .field.name,.rgrid .field.item{grid-column:span 2}
+}
+
+/* ------------------------------------------------------- product */
+.row.static:hover{background:none;padding-left:0}
+.row.rating{grid-template-columns:minmax(0,1fr) auto}
+.row.rating .meta{grid-column:1}
+.row.rating .st{grid-column:2;grid-row:1;font-size:20px;letter-spacing:.08em}
+.row.rating .st.mono{font-size:13px}
+.row.rating .st.sig{color:var(--signal)}
+h3.sub{color:var(--mute);margin:clamp(22px,4vw,36px) 0 10px;font-weight:500}
+.stars{display:flex;gap:4px;margin:0 0 14px}
+.star{width:48px;height:48px;border:1px solid var(--rule);background:var(--paper);font-size:24px;line-height:1;
+  color:var(--rule);cursor:pointer}
+.star[aria-pressed=true]{color:var(--signal);border-color:var(--ink)}
+
+/* ------------------------------------------- "what shall I eat" wizard */
+.wizard-cta{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 14px;
+  margin:clamp(18px,3vw,28px) 0 0;padding:16px 18px;border:1px solid var(--ink);border-left:4px solid var(--signal)}
+.wizard-cta>span:first-child{font-weight:700;text-transform:uppercase;font-size:clamp(18px,2.4vw,24px);line-height:1.1}
+.wizard-cta .mono{color:var(--mute)}
+.wizard-cta:hover{background:var(--panel)}
+.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:6px 0 0}
+.choices.few{grid-template-columns:minmax(0,1fr)}
+.choice{min-height:56px;padding:10px 14px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+  font:600 16px/1.2 "Chakra Petch",system-ui,sans-serif;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.choice:hover,.choice:focus-visible{border-color:var(--ink);background:var(--panel)}
+.choice.any{grid-column:1/-1;border-color:var(--ink);text-align:center;font-family:"Share Tech Mono",monospace;
+  font-weight:500;text-transform:uppercase;letter-spacing:.08em;font-size:13px}
+div.field{margin:0 0 18px}
+div.field>span{display:block;color:var(--mute);margin-bottom:6px}
+/* "Verbruik: [6] [per week]" (rateInputs in public/app/pantry.js) */
+.rate-row{display:flex;gap:10px}
+.rate-row input{flex:1 1 5em;min-width:0}
+.rate-row select{flex:2 1 auto;width:auto;min-width:0}
+.rate-row input:disabled,.rate-row select:disabled{opacity:.45}
+.choices.meal-toggles{grid-template-columns:repeat(3,minmax(0,1fr));margin:0}
+.choice.toggle{min-height:48px;padding:8px 4px;text-align:center;font-size:15px;overflow-wrap:normal}
+.meal-toggles+.hint{margin:8px 0 0}
+.choice.toggle[aria-pressed=true]{border-color:var(--ink);background:var(--panel);box-shadow:inset 0 -3px 0 var(--signal)}
+.tag{display:inline-block;margin-right:8px;padding:1px 6px;border:1px solid var(--signal);color:var(--signal);font-size:11px}
+.label-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
+@media(min-width:760px){
+  .choices{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .choices.few{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .label-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
+/* ------------------------------------- the list per store (28-10-2026) */
+/* Only the box ticks (a 48 px column, the whole row high); the rest of the
+   line is one button that opens its details in place. */
+.entry.line{grid-template-columns:48px minmax(0,1fr);gap:0;padding:0;align-items:stretch;cursor:default;user-select:auto}
+.entry.line:hover{background:transparent}
+.entry.line .tick{grid-column:1;grid-row:1;display:flex;align-items:flex-start;justify-content:flex-start;
+  min-height:62px;padding:18px 0 0;margin:0;border:0;background:none;cursor:pointer;color:inherit}
+.entry.line .tick .box{margin-left:4px}
+.entry.line .tick:hover .box{background:var(--panel)}
+.entry.line .tick:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.entry.line.checked .box{background:var(--signal);border-color:var(--signal)}
+.entry.line.checked .box svg{opacity:1}
+.entry.line .line-main{grid-column:2;grid-row:1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;
+  align-items:center;align-content:center;min-height:62px;padding:10px 4px 10px 6px;margin:0;border:0;background:none;
+  color:inherit;font:inherit;text-align:left;cursor:pointer;width:100%}
+.entry.line .line-main:hover{background:var(--panel)}
+.entry.line .line-main:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.entry.line .line-main>.short,.entry.line .line-main>.deal,.entry.line .line-main>.cheaper{grid-column:1/3}
+.entry.line .short{font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
+.entry.line.checked .ttl{text-decoration:line-through;text-decoration-color:var(--signal);text-decoration-thickness:2px;color:var(--mute)}
+.entry.line.open .line-main{background:var(--panel)}
+.line-details{grid-column:1/3;background:var(--panel);padding:4px 10px 14px 54px;border-top:1px dashed var(--rule)}
+.line-details dl{margin:0}
+.line-details .kv-row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid var(--rule)}
+.line-details dt{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding-top:2px}
+.line-details dd{margin:0;font-size:14px;line-height:1.4;color:var(--body);overflow-wrap:anywhere;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.line-details .prod,.line-details .deal,.line-details .cheaper,.line-details .only-at{grid-column:auto;padding:0}
+.line-details .prod{min-height:24px}
+.line-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.line-actions .btn{min-height:44px}
+.line-actions .btn.danger{color:var(--signal);border-color:var(--signal)}
+@media(max-width:520px){
+  .line-details{padding-left:12px}
+  .line-details .kv-row{grid-template-columns:minmax(0,1fr);gap:2px}
+  .line-actions .btn{flex:1 1 calc(50% - 4px)}
+}
+.store-group h3.sub{display:flex;align-items:baseline;gap:10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.store-group h3.sub .n{color:var(--mute);font-weight:400}
+.store-group.here h3.sub{color:var(--ink)}
+.store-group.here h3.sub::before{content:"";display:inline-block;width:8px;height:8px;background:var(--signal);align-self:center}
+/* "Al nodig?" under the list: list lines (only the box ticks, into the basket) with what is left and "Nog niet". */
+.store-group.soon{margin-top:clamp(28px,5vw,44px)}
+.store-group.soon h3.sub{margin-bottom:2px}
+.soon-hint{margin:0 0 6px;font-size:13px;color:var(--mute)}
+.entry.line.soon-line .line-main{cursor:default}
+.entry.line.soon-line .line-main:hover{background:transparent}
+.entry.line.soon-line .soon-not-yet{min-height:36px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.entry.line.soon-line .soon-not-yet:hover{color:var(--ink)}
+/* The basket on top: no big gap above it, a gap below before the first store. */
+.cart>summary{margin-top:0;border-top:1px solid var(--rule)}
+.cart{margin-bottom:clamp(8px,2vw,16px)}
+.entry.line.open{background:var(--panel)}
+/* On top of the list the basket's heading is a size smaller than a page heading. */
+.cart>summary h2{font-size:clamp(22px,3.2vw,30px)}
+.cart>summary{padding:clamp(12px,2vw,18px) 0 10px}
+
+/* ------------------------------------------------- names: suggestions, links */
+/* The add box's suggestions and "Koppel aan…" (public/app/suggest-box.js). */
+.add + .suggest{margin:calc(-1 * clamp(10px,2vw,18px)) 0 clamp(16px,2.5vw,24px)}
+.suggest{list-style:none;margin:0;padding:0;border-top:1px solid var(--ink)}
+.suggest:empty{display:none}
+.suggest li{border-bottom:1px solid var(--rule)}
+.suggest .sg-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;width:100%;min-height:48px;padding:10px 10px 10px 12px;
+  border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.suggest .sg-row:hover,.suggest li.on .sg-row{background:var(--panel)}
+.suggest li.on .sg-row{box-shadow:inset 3px 0 0 var(--signal)}
+.suggest .sg-name{font-weight:700;text-transform:uppercase;font-size:16px;line-height:1.15;overflow-wrap:anywhere}
+.suggest .sg-also{font-size:12px;letter-spacing:.04em;color:var(--signal)}
+.suggest .sg-prod{flex-basis:100%;font-size:12px;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
+.suggest .sg-none{padding:12px;font-size:12px;color:var(--mute)}
+.link-sheet .suggest{margin:4px 0 12px;max-height:50vh;overflow-y:auto}
+.entry .new-tag{display:inline-block;margin-left:8px;padding:1px 6px;border:1px solid var(--signal);color:var(--signal);
+  font-size:10px;letter-spacing:.12em;vertical-align:3px;font-weight:500}
+.entry.line .line-main>.typed{grid-column:1/3;font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
+.entry.line .meant{grid-column:2;justify-self:start;min-height:40px;margin:0 0 8px 10px;padding:6px 12px;border:1px solid var(--signal);
+  background:transparent;color:var(--ink);font-size:12px;letter-spacing:.06em;cursor:pointer;text-align:left;overflow-wrap:anywhere}
+.entry.line .meant:hover{background:var(--panel)}
+.names{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.names .name-chip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 4px 0 12px;border:1px solid var(--rule);font-size:14px}
+.names .name-chip button{width:36px;height:36px;border:0;background:transparent;color:var(--mute);cursor:pointer;font-size:18px}
+.names .name-chip button:hover{color:var(--signal)}
+/* The × on an open line (removes it, with undo): its own 44 px column, the whole row high, apart from the tick box. */
+.entry.line{grid-template-columns:48px minmax(0,1fr) 44px}
+.entry.line.checked .line-main,.entry.line.soon-line .line-main{grid-column:2/4}
+.entry.line .del{grid-column:3;grid-row:1;display:flex;align-items:flex-start;justify-content:center;padding-top:16px;
+  border:0;background:transparent;color:var(--mute);font-size:22px;line-height:1;cursor:pointer}
+.entry.line .del:hover{color:var(--signal);background:var(--panel)}
+.entry.line .del:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.line-details{grid-column:1/-1}
+/* ------------------- stars in place, "Laatst gekocht" (30-10-2026) */
+.mini-stars{display:inline-flex;gap:0;flex:0 0 auto}
+.mini-star{width:36px;height:36px;border:0;background:transparent;font-size:20px;line-height:1;color:var(--mute);cursor:pointer;padding:0}
+.mini-star[aria-pressed=true]{color:var(--signal)}
+.mini-star:hover{color:var(--ink)}
+.mini-star[aria-pressed=true]:hover{color:var(--signal)}
+.recipe-stars{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.recipe-stars .avg{color:var(--ink)}
+.recipe-stars .cook-stats{flex-basis:100%}
+.rate-ask .low-acts{align-items:center}
+/* "Nachtcontrole": the strip on the list and the report (public/app/review.js) */
+.review-strip .low-name{text-transform:none;font-size:15px}
+.review-part{margin:0 0 12px}
+.review-part ul{list-style:none;margin:0;padding:0}
+.review-part li{padding:6px 0;border-top:1px solid var(--rule);overflow-wrap:anywhere}
+.review-part li:first-child{border-top:0}
+.review-part small{display:block;color:var(--mute);font-size:12px;letter-spacing:.04em}
+.recent-stores{margin:clamp(18px,3vw,28px) 0 0}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--on-ink)}
+.trip .section-head h2,.best-buys>summary h2{font-size:clamp(20px,2.6vw,28px)}
+.recent-line{grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;padding:10px 0}
+.recent-line .ttl{grid-column:1;font-size:16px;line-height:1.2}
+.recent-line a.ttl{color:var(--ink)}
+.recent-line a.ttl:hover{border-bottom:1px solid var(--signal)}
+.recent-line .st{grid-column:2;grid-row:1;color:var(--ink);white-space:nowrap}
+.recent-line .meta{grid-column:1/-1}
+.recent-line .mini-stars{grid-column:1/-1;margin-left:-8px}
+.recent-line .best{grid-column:1/-1;font-size:12px;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
+.recent-line .best-tag{color:var(--signal);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+/* Other stores' shelf prices (public/app/prices.js): the cheapest in ink, the rest quiet. */
+.store-prices{font-size:12px;line-height:1.35;letter-spacing:.04em;color:var(--mute);overflow-wrap:anywhere}
+.store-prices .cheapest{font-weight:500;color:var(--ink)}
+.recent-line .store-prices{grid-column:1/-1}
+.prices-hint{margin-top:22px}
+.prices-hint .store-prices{font-size:13px}
+.best-buys>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:14px;padding:clamp(18px,3vw,26px) 0 14px}
+.best-buys>summary::-webkit-details-marker{display:none}
+.best-buys .row.rating .meta{grid-column:1/-1}
+/* ----------------------------------------------- recipe import (recipe-import.js) */
+.choices.import-choices{grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 6px}
+.import-panel{margin-top:14px}
+.import-panel .actions{margin:12px 0}
+.import-thumbs{display:flex;flex-wrap:wrap;gap:10px}
+.import-thumb{position:relative;width:72px;height:72px;padding:0;border:1px solid var(--rule);background:var(--panel);cursor:default}
+button.import-thumb{cursor:pointer}
+.import-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.import-thumb[aria-pressed=true]{border-color:var(--ink);outline:3px solid var(--signal);outline-offset:2px}
+.import-x{position:absolute;top:-1px;right:-1px;width:28px;height:28px;border:1px solid var(--ink);background:var(--paper);
+  color:var(--ink);font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+.import-pick{margin:4px 0 6px}
+.import-pick>span{display:block;color:var(--mute);margin-bottom:8px}
+.import-pick .btn{min-height:72px}
+.btn[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 -3px 0 var(--signal)}
+.import-url{display:flex;gap:10px}
+.import-url input{flex:1 1 auto;min-width:0}
+.import-status{margin:12px 0 0;color:var(--body);font-size:15px}
+.import-status.sig{color:var(--signal)}
+/* ------------------------------------------------- recipes only (Henk) */
+.share-link{font:14px/1.4 "Share Tech Mono",monospace;margin:10px 0 6px}
+.home-hint{margin:14px 0 0}

@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- A made-up recipe page in the shape real Dutch recipe sites use: a Yoast
+     style @graph with WebPage and Recipe, HTML entities in the strings, the
+     steps in HowToSections, the image as an ImageObject list, a second broken
+     JSON-LD block, and an og:image that must lose to the JSON-LD image. -->
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Hutspot met draadjesvlees &amp; jus | Testkeuken</title>
+<meta property="og:image" content="https://cdn.testkeuken.nl/og/hutspot-social.jpg">
+<script type="application/ld+json">{ "this is": "broken", </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "WebPage", "@id": "https://www.testkeuken.nl/hutspot/#webpage", "name": "Hutspot" },
+    { "@type": "BreadcrumbList", "itemListElement": [{ "@type": "ListItem", "position": 1, "name": "Home" }] },
+    {
+      "@type": ["Recipe"],
+      "@id": "https://www.testkeuken.nl/hutspot/#recipe",
+      "name": "Hutspot met draadjesvlees &amp; jus",
+      "description": "Stamppot met lang gestoofd, zacht vlees.",
+      "image": [
+        { "@type": "ImageObject", "url": "/images/hutspot-1200x800.jpg", "width": 1200, "height": 800 },
+        { "@type": "ImageObject", "url": "/images/hutspot-1x1.jpg" }
+      ],
+      "recipeYield": ["4", "4 personen"],
+      "totalTime": "PT3H20M",
+      "recipeIngredient": [
+        "1 kg draadjesvlees",
+        "2 uien",
+        "&frac12; el bloem",
+        "1,5 kg kruimige aardappelen",
+        "1 kg winterpeen",
+        "2 laurierblaadjes",
+        "<strong>1</strong> boterham met mosterd"
+      ],
+      "recipeInstructions": [
+        {
+          "@type": "HowToSection",
+          "name": "Voorbereiding",
+          "itemListElement": [
+            { "@type": "HowToStep", "text": "Snijd het vlees in blokjes en bestrooi met bloem." },
+            { "@type": "HowToStep", "text": "Snipper de uien." }
+          ]
+        },
+        {
+          "@type": "HowToSection",
+          "name": "Stoven",
+          "itemListElement": [
+            { "@type": "HowToStep", "text": "Bak het vlees bruin, voeg de uien toe en schenk er water &amp; laurier bij." },
+            { "@type": "HowToStep", "text": "<p>Leg de boterham erop en stoof 3 uur op laag vuur. Kook de aardappelen met de peen en stamp ze fijn.</p>" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<nav>Home · Recepten · Contact</nav>
+<h1>Hutspot met draadjesvlees &amp; jus</h1>
+<p>Stamppot met lang gestoofd, zacht vlees.</p>
+<footer>© Testkeuken</footer>
+</body>
+</html>

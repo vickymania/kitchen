@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English. The Dutch texts are in values-nl/strings.xml; keep the same names in both. -->
+<resources>
+    <string name="app_name">Groceries</string>
+
+    <string name="widget_label">Groceries</string>
+    <string name="widget_description">Put something on the shared list in two taps.</string>
+    <string name="widget_eyebrow">GROCERIES</string>
+    <string name="widget_open">open</string>
+    <string name="widget_unpaired">Link first</string>
+    <string name="widget_add">Add to the list</string>
+    <string name="widget_open_list">Open the list</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_empty">Nothing on the list.</string>
+    <string name="widget_tick">Tick off</string>
+    <string name="widget_remove">Take off the list</string>
+    <string name="widget_open_entry">OPEN IN APP</string>
+    <string name="group_anywhere">Anywhere</string>
+    <string name="only_at">Get it at %1$s</string>
+    <string name="deal_mine">your product is on offer</string>
+    <string name="deal_until">until %1$s</string>
+    <string name="for_recipes">for %1$s</string>
+    <string name="offer_tag">%% %1$s</string>
+
+    <!-- "Need it yet?" under the list: soon.*, low.left, low.pieces, low.empty_*, rate.supply_* in public/i18n/en.json. -->
+    <string name="soon_title">Need it yet?</string>
+    <string name="soon_not_yet">NOT YET</string>
+    <string name="soon_left">%1$s left</string>
+    <string name="soon_pieces">pcs</string>
+    <string name="soon_empty_today">ran out today</string>
+    <plurals name="soon_empty_ago">
+        <item quantity="one">ran out yesterday</item>
+        <item quantity="other">ran out %1$d days ago</item>
+    </plurals>
+    <plurals name="supply_days">
+        <item quantity="one">~1 day</item>
+        <item quantity="other">~%1$d days</item>
+    </plurals>
+    <plurals name="supply_weeks">
+        <item quantity="one">~1 week</item>
+        <item quantity="other">~%1$d weeks</item>
+    </plurals>
+    <plurals name="supply_months">
+        <item quantity="one">~1 month</item>
+        <item quantity="other">~%1$d months</item>
+    </plurals>
+
+    <string name="quick_eyebrow">ON THE LIST</string>
+    <string name="quick_hint">2 onions, 500 g mince…</string>
+    <string name="quick_add">Add</string>
+    <string name="quick_offline">No connection: it goes along as soon as there is one.</string>
+    <string name="quick_added">✓ %1$s</string>
+    <!-- A suggestion row: names.also in public/i18n. -->
+    <string name="quick_also">also: %1$s</string>
+
+    <string name="pair_eyebrow">THIS PHONE</string>
+    <string name="pair_title">Link</string>
+    <string name="pair_explain">In Groceries: Settings, then Link another device. Type the six digits here.</string>
+    <string name="pair_code">Code</string>
+    <string name="pair_button">Link this phone</string>
+    <string name="pair_label">Widget (%1$s)</string>
+    <string name="pair_wrong_code">That code is wrong or has expired.</string>
+    <string name="pair_too_many">Too many wrong codes today. Try again tomorrow.</string>
+    <string name="pair_offline">No connection. Try again when there is one.</string>
+
+    <string name="paired_title">Linked</string>
+    <string name="paired_as">%1$s · %2$s</string>
+    <string name="paired_explain">Touch and hold the home screen, then Widgets, then Groceries. Tap the widget to put something on the list: type it, or use the microphone on the keyboard.</string>
+    <string name="pin_widget">Put the widget on the home screen</string>
+    <string name="unpair">Unlink this phone</string>
+</resources>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recipes</title>
+<meta name="theme-color" content="#0B0D10">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/recipes-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icons/recipes-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preload" href="/fonts/chakra-petch-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles/app.css">
+</head>
+<body data-app="recipes">
+<div class="reg tl"></div><div class="reg tr"></div><div class="reg bl"></div><div class="reg br"></div>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#/">
+      <svg class="mark" viewBox="189.75 15.75 118.5 118.5" aria-hidden="true"><g fill="none" stroke-width="15" stroke-linejoin="miter" stroke-linecap="butt"><path d="M212 130 L249 75 L286 130" stroke="#C8152C"/><path d="M215 75 L283 75" stroke="#C8152C"/><path d="M212 20 L249 75 L286 20" stroke="currentColor"/></g></svg>
+      <span class="wordmark" data-t="app.recipes">Recipes</span>
+    </a>
+    <nav class="topnav mono">
+      <a href="#/" data-nav="recipes" aria-current="page" data-t="app.recipes">Recipes</a>
+      <a href="/" data-nav="groceries" data-t="app.groceries">Groceries</a>
+      <a href="#/settings" class="gear" data-t-aria-label="settings.title" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></a>
+    </nav>
+  </div>
+</header>
+<main id="main"></main>
+<div id="toasts" aria-live="polite"></div>
+<script type="module" src="/app/boot.js"></script>
+</body>
+</html>

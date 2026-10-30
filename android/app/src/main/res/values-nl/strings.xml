@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Boodschappen</string>
+
+    <string name="widget_label">Boodschappen</string>
+    <string name="widget_description">Zet iets op de gedeelde lijst in twee tikken.</string>
+    <string name="widget_eyebrow">BOODSCHAPPEN</string>
+    <string name="widget_open">open</string>
+    <string name="widget_unpaired">Eerst koppelen</string>
+    <string name="widget_add">Op de lijst zetten</string>
+    <string name="widget_open_list">Open de lijst</string>
+    <string name="widget_refresh">Verversen</string>
+    <string name="widget_empty">Niets op de lijst.</string>
+    <string name="widget_remove">Van de lijst halen</string>
+    <string name="widget_tick">Afvinken</string>
+    <string name="widget_open_entry">OPEN IN DE APP</string>
+    <string name="group_anywhere">Overal</string>
+    <string name="only_at">Haal bij %1$s</string>
+    <string name="deal_mine">jouw product in de aanbieding</string>
+    <string name="deal_until">t/m %1$s</string>
+    <string name="for_recipes">voor %1$s</string>
+    <string name="offer_tag">%% %1$s</string>
+
+    <!-- "Al nodig?" onder de lijst: soon.*, low.left, low.pieces, low.empty_*, rate.supply_* in public/i18n/nl.json. -->
+    <string name="soon_title">Al nodig?</string>
+    <string name="soon_not_yet">NOG NIET</string>
+    <string name="soon_left">nog %1$s</string>
+    <string name="soon_pieces">st</string>
+    <string name="soon_empty_today">vandaag op</string>
+    <plurals name="soon_empty_ago">
+        <item quantity="one">gisteren op</item>
+        <item quantity="other">%1$d dagen geleden op</item>
+    </plurals>
+    <plurals name="supply_days">
+        <item quantity="one">~1 dag</item>
+        <item quantity="other">~%1$d dagen</item>
+    </plurals>
+    <plurals name="supply_weeks">
+        <item quantity="one">~1 week</item>
+        <item quantity="other">~%1$d weken</item>
+    </plurals>
+    <plurals name="supply_months">
+        <item quantity="one">~1 maand</item>
+        <item quantity="other">~%1$d maanden</item>
+    </plurals>
+
+    <string name="quick_eyebrow">OP DE LIJST</string>
+    <string name="quick_hint">2 ui, 500 gr gehakt…</string>
+    <string name="quick_add">Toevoegen</string>
+    <string name="quick_offline">Geen verbinding: het gaat mee zodra die er is.</string>
+    <string name="quick_added">✓ %1$s</string>
+    <!-- A suggestion row: names.also in public/i18n. -->
+    <string name="quick_also">ook: %1$s</string>
+
+    <string name="pair_eyebrow">DIT TOESTEL</string>
+    <string name="pair_title">Koppel</string>
+    <string name="pair_explain">In Boodschappen: Instellingen, dan Ander toestel koppelen. Typ de zes cijfers hier.</string>
+    <string name="pair_code">Code</string>
+    <string name="pair_button">Koppel deze telefoon</string>
+    <string name="pair_label">Widget (%1$s)</string>
+    <string name="pair_wrong_code">Die code klopt niet of is verlopen.</string>
+    <string name="pair_too_many">Te veel foute codes vandaag. Probeer het morgen weer.</string>
+    <string name="pair_offline">Geen verbinding. Probeer het opnieuw als die er is.</string>
+
+    <string name="paired_title">Gekoppeld</string>
+    <string name="paired_as">%1$s · %2$s</string>
+    <string name="paired_explain">Houd je startscherm ingedrukt, kies Widgets en dan Boodschappen. Tik op de widget om iets op de lijst te zetten: typ het, of gebruik de microfoon op het toetsenbord.</string>
+    <string name="pin_widget">Widget op startscherm zetten</string>
+    <string name="unpair">Deze telefoon ontkoppelen</string>
+</resources>

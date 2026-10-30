@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The tokens of vexed.works (public/styles/app.css): paper, panel, ink, mute, rule, signal. -->
+<resources>
+    <color name="paper">#FFFFFF</color>
+    <color name="panel">#F1F3F5</color>
+    <color name="ink">#0B0D10</color>
+    <color name="mute">#79828F</color>
+    <color name="rule">#D3D8DE</color>
+    <color name="signal">#C8152C</color>
+    <color name="ink_fixed">#0B0D10</color>
+    <color name="white_fixed">#FFFFFF</color>
+</resources>
