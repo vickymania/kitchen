@@ -35,7 +35,7 @@ export function mountEditor(root, id) {
   steps.value = existing ? existing.steps.join("\n") : "";
   const notes = h("textarea", { rows: "4" });
   notes.value = existing?.notes ?? "";
-  const source = h("input", { type: "url", value: existing?.source_url ?? "", placeholder: "https://" });
+  const source = h("input", { type: "text", value: existing?.source_url ?? "", placeholder: t("edit.source_placeholder"), maxlength: "500" });
   const preview = h("ul", { class: "preview-ings", "aria-live": "polite" });
 
   // The wizard's labels. Changing one makes them this person's: Claude never

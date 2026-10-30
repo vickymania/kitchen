@@ -250,7 +250,9 @@ export function mountRecipe(root, id) {
           r.steps.length ? h("ol", { class: "steps" }, r.steps.map((s) => h("li", {}, s))) : h("p", { class: "empty" }, t("recipe.no_steps")),
           r.notes ? h("div", { class: "section-head" }, h("h2", {}, t("recipe.notes"))) : null,
           r.notes ? h("p", { class: "notes" }, r.notes) : null)),
-      h("footer", { class: "foot wrap mono" }, r.source_url ? h("a", { href: r.source_url, rel: "noopener noreferrer", target: "_blank" }, t("recipe.source")) : null),
+      h("footer", { class: "foot wrap mono" }, !r.source_url ? null
+        : /^https?:\/\//i.test(r.source_url) ? h("a", { href: r.source_url, rel: "noopener noreferrer", target: "_blank" }, t("recipe.source"))
+        : h("span", {}, t("recipe.credits", { who: r.source_url }))),
     );
   }
 

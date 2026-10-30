@@ -103,3 +103,14 @@ test("members change only their own name, unless admin", () => {
   assert.equal(s.members["member-sam00"].locale, "en");
   assert.equal(code(() => run(s, { type: "member.update", id: "member-sam00", locale: "de" }, ctx("member-sam00"))), "bad_field");
 });
+
+test("credits: a link or just a name", () => {
+  const code = (fn) => { try { fn(); } catch (e) { assert.ok(e instanceof OpError); return e.code; } return null; };
+  const s = emptyState();
+  run(s, { type: "recipe.put", id: "recipe-cred1", recipe: { title: "Pannenkoeken", source_url: "  Henk  " } });
+  assert.equal(s.recipes["recipe-cred1"].source_url, "Henk");
+  run(s, { type: "recipe.put", id: "recipe-cred1", recipe: { source_url: "https://example.com/pannenkoeken" } });
+  assert.equal(s.recipes["recipe-cred1"].source_url, "https://example.com/pannenkoeken");
+  assert.equal(code(() => run(s, { type: "recipe.put", id: "recipe-cred1", recipe: { source_url: "https://x" } })), "bad_field");
+  assert.equal(code(() => run(s, { type: "recipe.put", id: "recipe-cred1", recipe: { source_url: "a".repeat(121) } })), "bad_field");
+});

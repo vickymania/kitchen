@@ -529,10 +529,15 @@ const RECIPE_FIELDS = {
     if (typeof v !== "string" || !PHOTO_RE.test(v)) throw new OpError("bad_field", "photo");
     return v;
   },
+  // "Credits" (30-10-2026): a link to the original, or just a name
+  // ("Henk", "Noor"). A link must be http(s); anything else is plain text.
   source_url: (v) => {
     if (v === null || v === "") return null;
-    if (typeof v !== "string" || !/^https?:\/\/\S{3,500}$/.test(v)) throw new OpError("bad_field", "source_url");
-    return v;
+    if (typeof v !== "string") throw new OpError("bad_field", "source_url");
+    const text = v.replace(/\s+/g, " ").trim();
+    if (!text) return null;
+    if (/^https?:\/\//i.test(text) ? !/^https?:\/\/\S{3,500}$/.test(text) : text.length > 120) throw new OpError("bad_field", "source_url");
+    return text;
   },
   cuisine: oneOf(CUISINES, "cuisine"),
   main_ingredient: oneOf(MAIN_INGREDIENTS, "main_ingredient"),
