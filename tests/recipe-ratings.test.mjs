@@ -44,7 +44,7 @@ test("recipe.rate: per member, the same again writes nothing, null clears, a bad
   assert.deepEqual(recipeStars(s.recipe_ratings, "recipe-pasta-001"), { average: 10, count: 1, byMember: { [THOMAS]: 10 } }, "a cleared row is not in the average");
   assert.deepEqual(rate(SAM, { stars: null }).changed, [], "clearing twice: nothing");
   assert.deepEqual(applyOp(s, { type: "recipe.rate", recipe_id: "recipe-chili-001", stars: null }, ctx(THOMAS)).changed, [], "clearing what was never rated: nothing");
-  for (const stars of [0, 11, 2.5, "x", -1]) assert.throws(() => rate(THOMAS, { stars }), OpError);
+  for (const stars of [0, 11, 2.3, "x", -1]) assert.throws(() => rate(THOMAS, { stars }), OpError);
   assert.throws(() => applyOp(s, { type: "recipe.rate", id: "rrate-x-0000001", recipe_id: "recipe-none-0001", stars: 3 }, ctx(THOMAS)), OpError);
   assert.equal(importerMayApply({ type: "recipe.rate", recipe_id: "recipe-pasta-001", stars: 3 }), false, "the importer never rates");
 });

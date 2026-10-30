@@ -580,6 +580,7 @@ div.field>span{display:block;color:var(--mute);margin-bottom:6px}
 .mini-star[aria-pressed=true]{color:var(--signal)}
 .mini-star:hover{color:var(--ink)}
 .mini-star[aria-pressed=true]:hover{color:var(--signal)}
+.mini-star[data-fill=half],.star[data-fill=half]{color:transparent;background:linear-gradient(90deg,var(--signal) 50%,var(--mute) 50%);-webkit-background-clip:text;background-clip:text}
 .recipe-stars{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
 .recipe-stars .avg{color:var(--ink)}
 .recipe-stars .cook-stats{flex-basis:100%}

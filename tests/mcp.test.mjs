@@ -217,6 +217,11 @@ test("the kitchen MCP server: due items from the history, ratings read and writt
     assert.equal(rated.text, "Rated 4/10.");
     const read = await client.tool("kitchen_product_ratings", { query: "melk" });
     assert.match(read.text, /- AH Halfvolle melk, 1 l \[id: product-mcp-001\] item: Melk; ratings: Thomas 4\/10 "goed"/);
+    // Half stars (30-10-2026): 6.5 is kept and shown as it is; 6.3 is refused.
+    const half = await client.tool("kitchen_product_rate", { product_id: "product-mcp-001", stars: 6.5 });
+    assert.equal(half.text, "Rated 6.5/10.");
+    assert.match((await client.tool("kitchen_product_ratings", { query: "melk" })).text, /ratings: Thomas 6\.5\/10/);
+    assert.equal((await client.tool("kitchen_product_rate", { product_id: "product-mcp-001", stars: 6.3 })).error, true);
     const wrong = await client.tool("kitchen_product_rate", { product_id: "product-mcp-404", stars: 4 });
     assert.equal(wrong.error, true);
   } finally {

@@ -9,6 +9,7 @@
 import { isExcluded } from "./excluded.js";
 import { canonicalStore, sameStore } from "./stores.js";
 import { parseSize } from "./deal-math.js";
+import { isStarValue } from "./recipe-ratings.js";
 
 /** Trips shown per page of the tab. */
 export const TRIPS_PAGE = 15;
@@ -68,7 +69,7 @@ export function tripStores(trips) {
 export function productStars(ratings) {
   const sum = new Map();
   for (const r of live(ratings)) {
-    if (!Number.isInteger(r.stars)) continue;
+    if (!isStarValue(r.stars)) continue;
     const cur = sum.get(r.product_id) ?? { total: 0, count: 0 };
     cur.total += r.stars;
     cur.count += 1;

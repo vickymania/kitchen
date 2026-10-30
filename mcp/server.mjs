@@ -413,7 +413,7 @@ const TOOLS = [
   },
   {
     name: "kitchen_recipes_search",
-    description: "Search the recipe book by title or ingredient. Without a query: every recipe. Ideas (only a title) are marked. Each recipe shows the household's stars (1-10, average and per person); the best rated come first and low-rated ones (under 6) last, so suggest from the top.",
+    description: "Search the recipe book by title or ingredient. Without a query: every recipe. Ideas (only a title) are marked. Each recipe shows the household's stars (0.5-10, average and per person); the best rated come first and low-rated ones (under 6) last, so suggest from the top.",
     inputSchema: { type: "object", properties: { query: { type: "string" } } },
     async run({ query = "" }) {
       const s = await state();
@@ -903,7 +903,7 @@ const TOOLS = [
   },
   {
     name: "kitchen_product_ratings",
-    description: "Known products (from receipts or typed in) with each person's stars (1-10) and note, the last price and store, and whether it is the preferred product of its item. Search by product, brand or item name.",
+    description: "Known products (from receipts or typed in) with each person's stars (0.5-10) and note, the last price and store, and whether it is the preferred product of its item. Search by product, brand or item name.",
     inputSchema: { type: "object", properties: { query: { type: "string" } } },
     async run({ query = "" }) {
       const s = await state();
@@ -922,11 +922,11 @@ const TOOLS = [
   },
   {
     name: "kitchen_product_rate",
-    description: "Give a product 1-10 stars and an optional short note, as the person behind this connection (stars: 0 removes the rating). The product id comes from kitchen_product_ratings.",
+    description: "Give a product 0.5-10 stars (steps of 0.5, so 6.5 is fine) and an optional short note, as the person behind this connection (stars: 0 removes the rating). The product id comes from kitchen_product_ratings.",
     inputSchema: {
       type: "object",
       required: ["product_id", "stars"],
-      properties: { product_id: { type: "string" }, stars: { type: "integer", minimum: 0, maximum: STARS_MAX }, note: { type: "string" } },
+      properties: { product_id: { type: "string" }, stars: { type: "number", minimum: 0, maximum: STARS_MAX, multipleOf: 0.5 }, note: { type: "string" } },
     },
     async run({ product_id, stars, note = "" }) {
       await send([{ type: "rating.set", id: newId(), product_id, stars: stars || null, note }]);

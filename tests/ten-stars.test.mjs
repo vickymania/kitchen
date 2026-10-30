@@ -53,7 +53,7 @@ test("ops: rating.set and recipe.rate take 1 to 10 and refuse 0, 11, fractions a
     applyOp(s, { type: "recipe.rate", id: "rrate-t-00001", recipe_id: "recipe-chili-001", stars: n, on: "2026-10-30" }, ctx());
     assert.equal(s.recipe_ratings["rrate-t-00001"].stars, n);
   }
-  for (const bad of [0, 11, 100, -3, 5.5, "x", NaN]) {
+  for (const bad of [0, 11, 100, -3, 5.3, "x", NaN]) {
     assert.throws(() => applyOp(s, { type: "rating.set", id: "rating-t-0001", product_id: "product-kaas-01", stars: bad }, ctx()), OpError, `rating.set ${bad}`);
     assert.throws(() => applyOp(s, { type: "recipe.rate", id: "rrate-t-00001", recipe_id: "recipe-chili-001", stars: bad, on: "2026-10-30" }, ctx()), OpError, `recipe.rate ${bad}`);
   }

@@ -1,22 +1,30 @@
 // Stars you tap in place (30-10-2026): a recipe's (recipe.rate) on the
 // recipe page and in "Hoe was <recipe> gisteren?", and a product's
-// (rating.set) on the "Laatst gekocht" tab. A tap on the stars you already
-// gave takes them away. The numbers are public/shared/recipe-ratings.js.
+// (rating.set) on the "Laatst gekocht" tab. A tap on the star you already
+// gave makes it a half star, a third tap takes the stars away. The numbers are public/shared/recipe-ratings.js.
 import { h, toast, newId } from "./dom.js";
 import { t, formatNumber, getLocale } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import * as store from "./store.js";
-import { rateAsks, recipeStars, myRecipeRating, recipeCooks, STARS_MAX } from "../shared/recipe-ratings.js";
+import { rateAsks, recipeStars, myRecipeRating, recipeCooks, STARS_MAX, nextTap, starFill } from "../shared/recipe-ratings.js";
 
 const refused = (err) => toast(err instanceof OpError ? t(`errors.${err.code}`) : t("errors.refused"), { error: true });
 
-/** Ten star buttons (32 px each: ten fit in a row at 375 px); onPick(n) with n 1..10, or null when the current value is tapped again. */
+/**
+ * Ten star buttons (32 px each: ten fit in a row at 375 px); onPick(value) with
+ * the tap cycle of nextTap: n, then n - 0.5, then null (clear). A half star is
+ * drawn half full (data-fill).
+ */
 export function miniStars(current, onPick, { label = "" } = {}) {
   return h("span", { class: "mini-stars", role: "group", "aria-label": label || null },
-    Array.from({ length: STARS_MAX }, (_, i) => i + 1).map((n) => h("button", {
-      type: "button", class: "mini-star", "aria-label": t("rstars.star", { n }), "aria-pressed": String(Boolean(current) && n <= current),
-      onclick: (ev) => { ev.stopPropagation(); onPick(n === current ? null : n); },
-    }, "★")));
+    Array.from({ length: STARS_MAX }, (_, i) => i + 1).map((n) => {
+      const fill = starFill(current, n);
+      return h("button", {
+        type: "button", class: "mini-star", "data-fill": fill, "aria-label": t("rstars.star", { n }),
+        "aria-pressed": fill === "full" ? "true" : fill === "half" ? "mixed" : "false",
+        onclick: (ev) => { ev.stopPropagation(); onPick(nextTap(current, n)); },
+      }, "★");
+    }));
 }
 
 /** "★8,5 · 2 stemmen", or "" without stars. */

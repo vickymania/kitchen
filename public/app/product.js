@@ -3,7 +3,7 @@
 // and a short note). From here, or from a list line or a recipe, it becomes
 // the product to buy for its item: at any store or one, for any recipe or
 // one (public/shared/preferences.js), which the list line then shows.
-import { STARS_MAX } from "../shared/recipe-ratings.js";
+import { STARS_MAX, nextTap, starFill, starsLabel } from "../shared/recipe-ratings.js";
 import { h, title, toast, sheet, newId, fill } from "./dom.js";
 import { t, getLocale, formatDate } from "./i18n.js";
 import { OpError, productKey } from "../shared/ops.js";
@@ -31,8 +31,8 @@ export function money(cents) {
   return new Intl.NumberFormat(getLocale() === "nl" ? "nl-NL" : "en-GB", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-/** "★8": ten stars in a row would not fit next to the name. */
-export const starsText = (n) => `★${n}`;
+/** "★8" or "★6,5" (Dutch comma): ten stars in a row would not fit next to the name. */
+export const starsText = (n) => starsLabel(n, getLocale());
 
 function refused(err) {
   toast(err instanceof OpError ? t(`errors.${err.code}`) : t("errors.refused"), { error: true });
@@ -56,7 +56,7 @@ export function whyText(why) {
 
 /** "Thomas ★4 · Sam ★2": every person's stars, so choosing is easy. */
 function ratingsText(view, productId) {
-  return ratingsOf(view, productId).map((r) => `${r.name} ★${r.stars}`).join(" · ");
+  return ratingsOf(view, productId).map((r) => `${r.name} ${starsText(r.stars)}`).join(" · ");
 }
 
 /** The products known for an item: linked to it, or bought for it from a receipt. */
@@ -214,9 +214,14 @@ function ratingForm(product, mine) {
   let stars = mine?.stars ?? 0;
   const buttons = Array.from({ length: STARS_MAX }, (_, i) => i + 1).map((n) => h("button", {
     type: "button", class: "star", "aria-label": t("product.stars", { n }),
-    onclick: () => { stars = n; paint(); },
+    onclick: () => { stars = nextTap(stars, n) ?? 0; paint(); },
   }, "★"));
-  const paint = () => buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(i < stars)));
+  // A half star is drawn half full (data-fill, public/styles/app.css).
+  const paint = () => buttons.forEach((b, i) => {
+    const fill = starFill(stars, i + 1);
+    b.dataset.fill = fill;
+    b.setAttribute("aria-pressed", fill === "full" ? "true" : fill === "half" ? "mixed" : "false");
+  });
   paint();
   const note = h("input", { maxlength: "280", value: mine?.note ?? "", placeholder: t("product.note_placeholder") });
   const save = async (ev) => {

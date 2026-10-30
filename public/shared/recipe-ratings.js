@@ -1,5 +1,5 @@
-// Stars for recipes (30-10-2026): 1-10 per person (10 since the same
-// day: "ik wil 10 sterren ipv 5"), the household's
+// Stars for recipes (30-10-2026): 1-10 per person in steps of a half (10
+// since the same day: "ik wil 10 sterren ipv 5"), the household's
 // average shown with them. Not right after cooking ("dan moet je nog gaan
 // eten"): the day after a cook each person is asked "Hoe was <recipe>
 // gisteren?", once per cook, and can skip it. The rows are the op
@@ -9,6 +9,35 @@ import { daysBetween } from "./intervals.js";
 
 /** The most stars a person can give, for a recipe and for a product (migrations/0026_ten_stars.sql doubled the old 1-5). */
 export const STARS_MAX = 10;
+
+/** True for a stars value a person can give: 0.5 to 10 in steps of 0.5 (half stars since 30-10-2026). */
+export function isStarValue(n) {
+  return typeof n === "number" && Number.isFinite(n) && n >= 0.5 && n <= STARS_MAX && Number.isInteger(n * 2);
+}
+
+/**
+ * The tap cycle of a star (30-10-2026): tapping star n gives n whole;
+ * tapping it again gives the half below it (7 -> 6.5); a third tap on that
+ * same star takes the stars away (null). Any other star starts over with its
+ * own whole number. current: the stars now, or null/0 for none.
+ */
+export function nextTap(current, n) {
+  if (current === n) return n - 0.5;
+  if (current === n - 0.5) return null;
+  return n;
+}
+
+/** How star n (1..10) is drawn for these stars: "full", "half" or "empty". */
+export function starFill(current, n) {
+  if (!isStarValue(current)) return "empty";
+  if (n <= current) return "full";
+  return n - 0.5 === current ? "half" : "empty";
+}
+
+/** "★6,5" (nl, the Dutch comma) or "★6.5" (en); a whole number has no decimals. */
+export function starsLabel(n, locale = "nl") {
+  return `★${Number(n).toLocaleString(locale === "en" ? "en-GB" : "nl-NL", { maximumFractionDigits: 1 })}`;
+}
 
 /** The stars that neither pull nor push: 6 (the old 3). */
 export const STARS_NEUTRAL = 6;
@@ -25,7 +54,7 @@ const live = (rows) => Object.values(rows ?? {}).filter((r) => r && !r.deleted_a
 export function starsByRecipe(rows) {
   const out = new Map();
   for (const r of live(rows)) {
-    if (!Number.isInteger(r.stars)) continue;
+    if (!isStarValue(r.stars)) continue;
     const cur = out.get(r.recipe_id) ?? { sum: 0, count: 0, byMember: {} };
     cur.sum += r.stars;
     cur.count += 1;
@@ -71,7 +100,7 @@ export function rateAsks(view, memberId, today) {
     if (!recipe || recipe.deleted_at || out.has(recipe.id)) continue;
     const mine = myRecipeRating(view?.recipe_ratings, memberId, recipe.id);
     if (mine?.asked_on && mine.asked_on >= c.cooked_on) continue;
-    out.set(recipe.id, { recipe_id: recipe.id, title: recipe.title, cooked_on: c.cooked_on, stars: Number.isInteger(mine?.stars) ? mine.stars : null });
+    out.set(recipe.id, { recipe_id: recipe.id, title: recipe.title, cooked_on: c.cooked_on, stars: isStarValue(mine?.stars) ? mine.stars : null });
   }
   return [...out.values()].sort((a, b) => a.title.localeCompare(b.title));
 }

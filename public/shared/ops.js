@@ -16,7 +16,7 @@
 import { UNIT_CODES, nameKey, mergeAmounts } from "./ingredients.js";
 import { isExcluded } from "./excluded.js";
 import { canonicalStore } from "./stores.js";
-import { STARS_MAX } from "./recipe-ratings.js";
+import { isStarValue } from "./recipe-ratings.js";
 import { fromEntry, matchPurchase, round2, entryPantryId, purchasePantryId, parseLowAt, LOW_AT_MAX, drainRows, rowRate, rateEventId, RATE_MAX, RATE_MIN, RATE_SOURCES, RATE_RANK, pendingFits, pendingNeed, pendingEventId, PENDING_MAX } from "./pantry.js";
 import { estimateUseBy, addDays, KEEPS, SHELF_DAYS_MAX, SHELF_SOURCES, SHELF_RANK, openedDaysOf, itemShelfDays, openedUseBy } from "./shelf-life.js";
 import { CUISINES, MAIN_INGREDIENTS, TIME_CLASSES, MEALS, LABELS_BY, LABEL_FIELDS, sortMeals } from "./labels.js";
@@ -82,6 +82,13 @@ function num(v, field, { min = 0, max = 1e6 } = {}) {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n < min || n > max) throw new OpError("bad_field", field);
+  return n;
+}
+
+/** Stars from 0.5 to 10 in steps of 0.5 (30-10-2026), else bad_field. */
+function starsValue(v) {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  if (!isStarValue(n)) throw new OpError("bad_field", "stars");
   return n;
 }
 
@@ -1391,8 +1398,7 @@ const HANDLERS = {
       }
       return {};
     }
-    const stars = num(op.stars, "stars", { min: 1, max: STARS_MAX });
-    if (stars === null || !Number.isInteger(stars)) throw new OpError("bad_field", "stars");
+    const stars = starsValue(op.stars);
     const row = prev ?? { id: id(op.id), member_id: ctx.memberId, product_id: p.id, created_at: ctx.now };
     Object.assign(row, { stars, note: text(op.note, 280, "note"), updated_at: ctx.now, deleted_at: null });
     state.ratings[row.id] = row;
@@ -1566,8 +1572,7 @@ const HANDLERS = {
     const skip = op.skip === true;
     let stars = null;
     if (!skip && op.stars !== null) {
-      stars = num(op.stars, "stars", { min: 1, max: STARS_MAX });
-      if (stars === null || !Number.isInteger(stars)) throw new OpError("bad_field", "stars");
+      stars = starsValue(op.stars);
     }
     const prev = Object.values(state.recipe_ratings).find((x) => x.member_id === ctx.memberId && x.recipe_id === recipeId);
     const next = { ...(prev ?? {}) };
