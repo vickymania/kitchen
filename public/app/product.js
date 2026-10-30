@@ -5,7 +5,7 @@
 // one (public/shared/preferences.js), which the list line then shows.
 import { STARS_MAX, nextTap, starFill, starsLabel } from "../shared/recipe-ratings.js";
 import { h, title, toast, sheet, newId, fill, svg, LOCK_SVG } from "./dom.js";
-import { t, getLocale, formatDate } from "./i18n.js";
+import { t, getLocale, formatDate, itemName } from "./i18n.js";
 import { OpError, productKey } from "../shared/ops.js";
 import { nameKey } from "../shared/ingredients.js";
 import { resolveIngredient } from "../shared/ingredient-match.js";
@@ -441,7 +441,28 @@ function namesBlock(view, item) {
         h("button", { type: "button", "aria-label": t("names.remove", { alias: a.name }), onclick: () => remove(a) }, "×"))))
       : h("p", { class: "hint" }, t("names.none")),
     h("div", { class: "actions" }, h("button", { type: "button", class: "btn ghost", onclick: () => addNameSheet(item) }, t("names.add"))),
+    // The English name (item.translate, 0029): shown when the language is English.
+    h("p", { class: "hint en-name" }, h("span", { class: "mono mute" }, `${t("names.english")} `), item.name_en || t("names.english_none"),
+      " ", h("button", { type: "button", class: "btn ghost mono", onclick: () => englishSheet(item) }, t("names.english_edit"))),
   ];
+}
+
+/** "Engelse naam": type it, or empty it. A person's English name is never replaced by Claude's. */
+async function englishSheet(item) {
+  const input = h("input", { maxlength: "120", autocomplete: "off", enterkeyhint: "done", value: item.name_en ?? "" });
+  const result = await sheet((close) => {
+    setTimeout(() => input.focus());
+    return h("form", { onsubmit: (ev) => { ev.preventDefault(); close("save"); } },
+      h("h2", {}, t("names.english_title", { item: item.name })),
+      h("label", { class: "field" }, h("span", { class: "mono" }, t("names.english")), input),
+      h("div", { class: "actions" },
+        h("button", { type: "submit", class: "btn primary grow" }, t("names.save")),
+        h("button", { type: "button", class: "btn", onclick: () => close() }, t("common.cancel"))));
+  });
+  if (result !== "save") return;
+  const name = input.value.replace(/\s+/g, " ").trim();
+  if (name === (item.name_en ?? "")) return;
+  await store.dispatch({ type: "item.translate", item_id: item.id, name_en: name || null }).catch(refused);
 }
 
 async function addNameSheet(item) {
@@ -529,7 +550,7 @@ export function mountProduct(root, productId) {
         others.length ? null : h("li", { class: "empty" }, t("product.no_ratings"))),
       h("h3", { class: "mono sub" }, t("product.your_rating")),
       form,
-      item ? h("div", { class: "section-head" }, h("h2", {}, item.name)) : null,
+      item ? h("div", { class: "section-head" }, h("h2", {}, itemName(item))) : null,
       item ? h("p", { class: "hint" }, scopes.length ? t("product.is_preferred", { item: item.name, where }) : t("product.not_preferred", { item: item.name })) : null,
       item ? h("div", { class: "actions" },
         h("button", { type: "button", class: anyStore ? "btn" : "btn primary", onclick: () => toggle("", anyStore) },

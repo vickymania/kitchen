@@ -14,6 +14,7 @@ import { neededSoon, notYetOp, tickEntry } from "../public/shared/needed-soon.js
 import { amsterdamDay } from "./offers.js";
 import { isDealNote } from "../public/shared/store-prices.js";
 import { purchaseScores } from "../public/shared/suggest.js";
+import { localName } from "../public/shared/bilingual.js";
 import { hiddenStatement, hiddenOf, rowHidden } from "./privacy.js";
 
 const OPEN = "household_id = ? AND checked_at IS NULL AND deleted_at IS NULL";
@@ -39,7 +40,7 @@ const visible = (res, kind, hidden) => (hidden.empty ? res.results : res.results
  * The widget's payload for one household, or { rev, unchanged: true } when
  * nothing changed after `since`. today = the Dutch day the offers go by.
  */
-export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memberId = null) {
+export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memberId = null, lang = "nl") {
   // The rev first, like pull(): a change in between shows up next time instead of being skipped.
   const head = await db.prepare("SELECT rev FROM households WHERE id = ?").bind(hh).first();
   if (since > 0 && (head?.rev ?? 0) <= since) return { rev: head?.rev ?? 0, unchanged: true };
@@ -73,6 +74,9 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
   const byProduct = purchasesByProduct(byId(purchases.results, "purchases"));
   const current = currentOffers(byId(offers.results, "offers"), today);
   const open = entries.results.map((r) => fromRow("entries", r)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // The member's language (0029): an item's English name in English, else its Dutch one.
+  const itemRows = byId(items.results, "items");
+  const shown = (name) => localName({ items: itemRows }, lang, name);
 
   const lines = open.map((e) => {
     const resolved = resolveProduct(data, e, null);
@@ -86,7 +90,7 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
       store,
       line: {
         id: e.id,
-        title: e.title,
+        title: shown(e.title),
         amounts: e.amounts ?? [],
         // An offer Deals once wrote into the note is old text: the widget shows the current offer itself.
         note: isDealNote(e.note) ? "" : e.note ?? "",
@@ -120,7 +124,7 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
     entries: Object.fromEntries([...open, ...basket.results.map((r) => fromRow("entries", r))].map((e) => [e.id, e])),
     pantry: byId(pantry.results, "pantry"),
     pantry_events: byId(events.results, "pantry_events"),
-    items: byId(items.results, "items"),
+    items: itemRows,
     recipes: byId(recipes.results, "recipes"),
   };
   const soon = neededSoon(stock, today);
@@ -136,7 +140,7 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
     // list line the row's box makes (tickEntry); the widget sends it as
     // tickOps does: entry.add + entry.check of one new line, its own ids.
     needed_soon: soon.map((n) => ({
-      key: n.key, name: n.name, code: n.code, amount: n.amount,
+      key: n.key, name: shown(n.name), code: n.code, amount: n.amount,
       days_left: n.days_left === null ? null : Math.floor(n.days_left), on: n.on,
       not_yet: notYetOp(stock, today, n, () => `pn-${today}-${n.item_id}`.slice(0, 64)),
       tick: tickEntry(n),
@@ -154,9 +158,9 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
 // Fetched at most once a day (the `day` it was made for) and after linking.
 export const NAMES_MAX = 600;
 
-export async function widgetNames(db, hh, today = amsterdamDay(), memberId = null) {
+export async function widgetNames(db, hh, today = amsterdamDay(), memberId = null, lang = "nl") {
   const [rawItems, rawAliases, rawPurchases, rawPreferred, hiddenRows] = await db.batch([
-    db.prepare("SELECT id, name FROM items WHERE household_id = ? AND deleted_at IS NULL").bind(hh),
+    db.prepare("SELECT id, name, name_en FROM items WHERE household_id = ? AND deleted_at IS NULL").bind(hh),
     db.prepare("SELECT item_id, name FROM item_aliases WHERE household_id = ? AND deleted_at IS NULL").bind(hh),
     db.prepare("SELECT item_id, bought_on FROM purchases WHERE household_id = ? AND deleted_at IS NULL AND item_id IS NOT NULL").bind(hh),
     db.prepare(`SELECT pr.item_id, p.name, p.brand, p.size FROM preferences pr
@@ -176,9 +180,15 @@ export async function widgetNames(db, hh, today = amsterdamDay(), memberId = nul
   }
   const product = new Map(preferred.results.filter((p) => !isExcluded(`${p.brand ?? ""} ${p.name}`))
     .map((p) => [p.item_id, [brandedName(p), p.size].filter(Boolean).join(" · ")]));
+  // The other language's name is one more other name (0029): typing either finds
+  // the item; in English the English name is the one shown.
+  for (const i of items.results) {
+    if (!i.name_en || isExcluded(i.name_en)) continue;
+    other.set(i.id, [...(other.get(i.id) ?? []), lang === "en" ? i.name : i.name_en]);
+  }
   const names = items.results
     .filter((i) => !isExcluded(i.name))
-    .map((i) => ({ id: i.id, name: i.name, score: scores.get(i.id) ?? 0 }))
+    .map((i) => ({ id: i.id, name: lang === "en" && i.name_en && !isExcluded(i.name_en) ? i.name_en : i.name, score: scores.get(i.id) ?? 0 }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "nl"))
     .slice(0, NAMES_MAX)
     .map(({ id, name, score }) => ({

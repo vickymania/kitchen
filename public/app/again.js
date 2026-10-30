@@ -5,7 +5,7 @@
 // is what someone asked for, this is only a suggestion. Never an excluded thing
 // (public/shared/intervals.js filters it).
 import { h, title, toast, newId, fill } from "./dom.js";
-import { t } from "./i18n.js";
+import { t, shownName } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import { dueItems, localToday } from "../shared/intervals.js";
 import * as store from "./store.js";
@@ -41,7 +41,7 @@ function row(d) {
     onkeydown: (ev) => { if (!d.on_list && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); add(); } },
   },
   h("span", { class: "box plus", "aria-hidden": "true" }, d.on_list ? "✓" : "+"),
-  h("span", { class: "ttl" }, d.name),
+  h("span", { class: "ttl" }, shownName(store.getView(), d.name)),
   h("span", { class: "amt mono" }, d.on_list ? t("again.on_list") : d.in_pantry ? t("again.in_pantry") : d.due ? t("again.due") : ""),
   h("span", { class: "meta" }, meta),
   h("button", {

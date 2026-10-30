@@ -25,6 +25,7 @@ import { canonicalName } from "./item-names.js";
 import { aliasTarget, itemsNamed, findItem } from "./item-find.js";
 import { learnRate, onOffer, earlierPurchases } from "./rate-learning.js";
 import { LINK_HOWS, LINK_REASONS } from "./recipe-links.js";
+import { LANGS, NAME_EN_SOURCES, NAME_EN_RANK, recipeLang, detectLang, cleanTranslation } from "./bilingual.js";
 import { PRICE_STORE_NAMES, MAX_PRICE_WRITES, checkPriceRows, matchStorePrices, storePriceId } from "./store-prices.js";
 
 export class OpError extends Error {
@@ -46,6 +47,7 @@ export const OP_TYPES = [
   "item.merge", "product.move", "item.alias", "item.private",
   "prices.sync",
   "review.save", "recipe.links",
+  "item.translate", "recipe.translate",
 ];
 
 export const KINDS = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes"];
@@ -185,10 +187,10 @@ function lineItem(state, ctx, op, title) {
   return { item: resolveItem(state, ctx, title, op.item_id), made: true, linked: false };
 }
 
-/** What was typed, kept only when it is not the item's own name ("Pluiz" for "Minoes brokken"). */
+/** What was typed, kept only when it is not the item's own name ("Pluiz" for "Minoes brokken"), Dutch or English. */
 function typedName(typed, item) {
   const t = String(typed ?? "").trim();
-  return t && nameKey(t) !== item.name_key ? t.slice(0, 120) : null;
+  return t && nameKey(t) !== item.name_key && nameKey(t) !== item.name_en_key ? t.slice(0, 120) : null;
 }
 
 /** Both items private to the same member, or both the household's. */
@@ -558,6 +560,8 @@ const RECIPE_FIELDS = {
     return sortMeals(v);
   },
   labels_by: oneOf(LABELS_BY, "labels_by"),
+  // The language it is written in (0029); a recipe without one gets it from its text on save.
+  lang: oneOf(LANGS, "lang"),
 };
 
 // ---------------------------------------------------------------- pantry
@@ -984,6 +988,7 @@ const HANDLERS = {
     }
     if (keepPerson) row.labels_by = "person";
     if (!row.title) throw new OpError("title_required");
+    if (!row.lang) row.lang = detectLang(row);
     row.updated_at = ctx.now;
     row.deleted_at = null;
     state.recipes[rid] = row;
@@ -2132,6 +2137,48 @@ const HANDLERS = {
   // means two things. Its own name, or an alias it has, is { already: true }. One row per name ever: removing is a tombstone, adding
   // it again revives that row. Removing a merged-away name also lets go of the
   // merge's tombstone, so the name can be a new item again.
+  // The item's English name (30-10-2026: the NL/EN switch must switch
+  // the data too). { item_id, name_en, source? } ('person' unless 'claude');
+  // null or "" clears it. Not a key: two items may share one English name
+  // (findItem then trusts neither). Claude never replaces a person's
+  // ({ kept: true }), like a shelf life.
+  "item.translate"(state, op, ctx) {
+    const item = aliasTarget(state.items, state.items[id(op.item_id, "item_id")]);
+    if (!item) throw new OpError("not_found", "item");
+    const source = op.source === undefined ? "person" : op.source;
+    if (!NAME_EN_SOURCES.includes(source)) throw new OpError("bad_field", "source");
+    const name = text(op.name_en, 120, "name_en");
+    const key = name ? nameKey(name) : "";
+    if (name && !key) throw new OpError("bad_field", "name_en");
+    if (item.name_en_source && NAME_EN_RANK[source] < NAME_EN_RANK[item.name_en_source]) return { kept: true };
+    if ((item.name_en ?? null) === (name || null) && (item.name_en_source ?? null) === (name ? source : null)) return {};
+    Object.assign(item, { name_en: name || null, name_en_key: key || null, name_en_source: name ? source : null });
+    ctx.touch("items", item.id);
+    return {};
+  },
+
+  // A recipe in the other language (0029): { id, translation: { lang?, title,
+  // ingredients: [lines], steps, notes, of?, by? } } or translation null to
+  // drop it. `of` is the fingerprint of the original that was translated
+  // (public/shared/bilingual.js recipeFingerprint; absent: the recipe as it is
+  // now), so a translation of an older version is stale on arrival. The
+  // original is never touched; a recipe without a language gets it here.
+  "recipe.translate"(state, op, ctx) {
+    const r = state.recipes[id(op.id)];
+    if (!r || r.deleted_at) throw new OpError("not_found", "recipe");
+    if (!r.lang) r.lang = recipeLang(r);
+    let next = null;
+    if (op.translation !== null) {
+      next = cleanTranslation(op.translation, r);
+      if (!next) throw new OpError("bad_field", "translation");
+    }
+    if (JSON.stringify(r.translation ?? null) === JSON.stringify(next)) return {};
+    // updated_at stays: the nightly check's line links are made for it (recipe-links.js).
+    r.translation = next;
+    ctx.touch("recipes", r.id);
+    return {};
+  },
+
   "item.alias"(state, op, ctx) {
     const item = aliasTarget(state.items, state.items[id(op.item_id, "item_id")]);
     if (!item) throw new OpError("not_found", "item");
@@ -2204,13 +2251,14 @@ export function applyOp(state, op, ctx) {
 }
 
 /** Ops whose effect the nightly check's changelog records (auto_changes). */
-export const LOGGED_OPS = ["item.merge", "product.move", "item.alias", "item.rename", "recipe.links"];
+export const LOGGED_OPS = ["item.merge", "product.move", "item.alias", "item.rename", "recipe.links", "item.translate"];
 
 /** What a logged op's row needs from before it ran: the merged item's or the renamed item's name. */
 function beforeChange(state, op) {
   if (op.type === "item.merge" || op.type === "item.rename") {
     return { name: state.items[op.type === "item.merge" ? op.from_item_id : op.item_id]?.name ?? "" };
   }
+  if (op.type === "item.translate") return { name_en: state.items[op.item_id]?.name_en ?? null };
   return {};
 }
 
@@ -2246,6 +2294,10 @@ function logChange(state, op, result, before, ctx) {
     const item = state.items[op.item_id];
     if (!item || item.name === before.name) return;
     row = { what: "rename", name: before.name, target: item.name, item_id: item.id, product_id: null };
+  } else if (op.type === "item.translate") {
+    const item = state.items[op.item_id];
+    if (!item || result.kept || (item.name_en ?? null) === before.name_en) return;
+    row = { what: "translate", name: item.name, target: item.name_en ?? "", item_id: item.id, product_id: null };
   } else if (op.type === "recipe.links") {
     const r = state.recipes[op.recipe_id];
     const lines = r?.ingredient_links?.lines ?? [];

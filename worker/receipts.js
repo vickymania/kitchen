@@ -15,9 +15,11 @@ const TYPES = { "image/jpeg": "image/jpeg", "image/png": "image/png", "image/web
 const LINE = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "brand", "size", "quantity", "price", "kind"],
+  required: ["name", "name_en", "brand", "size", "quantity", "price", "kind"],
   properties: {
     name: { type: "string", description: "What the product is, in the receipt's language, written out in full (\"Halfvolle melk\", not \"HV MELK\")" },
+    // Its English name in the same call (0029, 30-10-2026: never a second call for it).
+    name_en: { type: "string", description: "The same thing in plain English as on a shopping list, without brand (\"Semi-skimmed milk\"); empty for a discount, deposit or other line" },
     brand: { type: "string", description: "Brand or store label when it is on the receipt (\"AH\", \"Calvé\"), else empty" },
     size: { type: "string", description: "Pack size when known (\"1 l\", \"500 g\", \"6 st\"), else empty" },
     quantity: { type: "number", description: "How many were bought; a weighed product is 1" },
@@ -72,6 +74,7 @@ export function reviewOf(answer) {
     }
     lines.push({
       name: String(l.name ?? "").trim().slice(0, 120),
+      name_en: typeof l.name_en === "string" && !isExcluded(l.name_en) ? l.name_en.replace(/\s+/g, " ").trim().slice(0, 60) : "",
       brand: String(l.brand ?? "").trim().slice(0, 60),
       size: String(l.size ?? "").trim().slice(0, 40),
       qty: Number.isFinite(Number(l.quantity)) && Number(l.quantity) > 0 ? Number(l.quantity) : 1,

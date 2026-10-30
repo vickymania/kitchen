@@ -43,7 +43,9 @@ export const REVIEWER_ONLY_OPS = new Set(["review.save", "recipe.links"]);
 // the same key only); which item each recipe line means (recipe.links); and its report. Never a new item, never removing a
 // name, never anything else. Every change lands in the changelog
 // (auto_changes, public/shared/ops.js logChange).
-const REVIEWER_OPS = new Set(["item.alias", "product.move", "item.merge", "item.rename", "review.save", "recipe.links"]);
+// An English name for an item (item.translate, 0029) too: as Claude's
+// (source "claude"), so a person's is never replaced, and never a clear.
+const REVIEWER_OPS = new Set(["item.alias", "product.move", "item.merge", "item.rename", "review.save", "recipe.links", "item.translate"]);
 
 /**
  * May the reviewer device apply this op? item.alias only to add a name (no
@@ -61,6 +63,7 @@ export function reviewerMayApply(op) {
   }
   if (op.type === "item.rename") return typeof op.item_id === "string" && typeof op.name === "string" && !/[?¿]/.test(op.name);
   if (op.type === "recipe.links") return typeof op.recipe_id === "string" && Array.isArray(op.lines);
+  if (op.type === "item.translate") return typeof op.item_id === "string" && typeof op.name_en === "string" && op.name_en.trim() !== "" && op.source === "claude";
   return true;
 }
 

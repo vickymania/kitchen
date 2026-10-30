@@ -7,6 +7,7 @@ import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pen
 import { addDays } from "../public/shared/shelf-life.js";
 import { OFFER_HISTORY } from "../public/shared/rate-learning.js";
 import { canonicalStore } from "../public/shared/stores.js";
+import { needsTranslation, recipeFingerprint } from "../public/shared/bilingual.js";
 import { hiddenStatement, hiddenOf, loadHidden, rowHidden, rowFor, guardOp, touchesHidden } from "./privacy.js";
 
 const TABLE = {
@@ -17,7 +18,7 @@ const TABLE = {
   reviews: "reviews", auto_changes: "auto_changes",
 };
 const JSON_FIELDS = {
-  recipes: ["ingredients", "steps", "nutrition", "meals", "ingredient_links"], entries: ["amounts", "sources"], items: [], members: [],
+  recipes: ["ingredients", "steps", "nutrition", "meals", "ingredient_links", "translation"], entries: ["amounts", "sources"], items: [], members: [],
   products: [], ratings: [], purchases: [], receipts: ["lines"], cooks: [], offers: [], preferences: [], pantry: [], pantry_events: ["rate_before"], deal_rules: ["match_words", "require_words", "exclude_words"],
   pending_takes: [], cook_prompts: ["entry_ids"], recipe_ratings: [], aliases: [], store_prices: [], reviews: ["fixed", "decide", "errors"], auto_changes: ["lines"],
 };
@@ -27,11 +28,12 @@ const JSON_FIELDS = {
 const COLUMNS = {
   recipes: ["id", "title", "servings", "ingredients", "steps", "notes", "nutrition", "photo", "source_url",
     "cuisine", "main_ingredient", "time_class", "time_minutes", "meals", "labels_by",
-    "created_by", "created_at", "updated_at", "deleted_at", "ingredient_links"],
+    "created_by", "created_at", "updated_at", "deleted_at", "ingredient_links", "lang", "translation"],
   entries: ["id", "item_id", "title", "typed", "new_item", "amounts", "note", "sources", "added_by", "checked_at", "checked_by",
     "created_at", "updated_at", "deleted_at"],
   items: ["id", "name", "name_key", "preferred_product_id", "again", "low_at", "low_off", "not_yet_until",
-    "shelf_days", "opened_days", "shelf_source", "use_per_day", "rate_source", "rate_samples", "merged_into", "private_to", "created_at", "deleted_at"],
+    "shelf_days", "opened_days", "shelf_source", "use_per_day", "rate_source", "rate_samples", "merged_into", "private_to", "created_at", "deleted_at",
+    "name_en", "name_en_key", "name_en_source"],
   products: ["id", "item_id", "name", "brand", "size", "store", "store_only", "category", "kind", "last_price_cents", "product_key",
     "shelf_days", "opened_days", "shelf_source", "created_at", "updated_at", "deleted_at"],
   ratings: ["id", "member_id", "product_id", "stars", "note", "created_at", "updated_at", "deleted_at"],
@@ -120,6 +122,8 @@ async function loadItems(db, hh, s, where, ...binds) {
 // (an expression index is used only for the same expression); its JS twin is
 // compactKey in public/shared/item-names.js.
 const COMPACT = "REPLACE(name_key, ' ', '') = ?";
+// The same for English names (0029, items_en_compact): findItem treats them like aliases.
+const COMPACT_EN = "REPLACE(name_en_key, ' ', '') = ?";
 
 /**
  * Every item and alias row a typed name could mean (findItem): the items
@@ -130,6 +134,7 @@ async function loadByName(db, hh, s, title) {
   const compact = nameKey(title).replace(/ /g, "");
   if (!compact) return;
   await loadItems(db, hh, s, COMPACT, compact);
+  await loadItems(db, hh, s, COMPACT_EN, compact);
   await loadInto(db, hh, s, "aliases", COMPACT, compact);
   await loadAliasItems(db, hh, s);
 }
@@ -351,6 +356,12 @@ async function load(db, hh, op, memberId) {
       }
       break;
     }
+    case "item.translate":
+      await loadItems(db, hh, s, "id = ?", String(op.item_id));
+      break;
+    case "recipe.translate":
+      await loadInto(db, hh, s, "recipes", "id = ?", String(op.id));
+      break;
     case "item.alias":
       await loadItems(db, hh, s, "id = ?", String(op.item_id));
       if (typeof op.name === "string") await loadByName(db, hh, s, op.name);
@@ -593,6 +604,21 @@ function unknownShelfProducts(state, changed) {
 }
 
 /**
+ * The items this op made (or brought back) without an English name: the
+ * worker asks Claude Haiku for one in the background (worker/kinds.js, in the
+ * same request as the products' kinds). Older items are filled by the
+ * one-off tool (tools/fill_translations.mjs), never here.
+ */
+function newItemsWithoutEnglish(state, changed, now) {
+  const out = [];
+  for (const [kind, rowId] of changed) {
+    const item = kind === "items" ? state.items[rowId] : null;
+    if (item && !item.deleted_at && !item.name_en && item.created_at === now) out.push(item.id);
+  }
+  return out;
+}
+
+/**
  * Apply a phone's ops in order. Each op is atomic on its own; one bad op does
  * not stop the ones after it.
  * ctx: { householdId, memberId, isAdmin, role }
@@ -600,6 +626,12 @@ function unknownShelfProducts(state, changed) {
  * pantry without a shelf life (worker/shelf.js); hooks.unknownShelfProducts
  * the ids of products bought on a receipt without one. hooks.unknownKind: a Set
  * that gets the ids of products written without a kind (worker/kinds.js).
+ * hooks.untranslatedItems: the ids of items made without an English name
+ * (worker/kinds.js); hooks.untranslatedRecipes: recipes whose text an edit
+ * changed while their translation is missing or stale (worker/translate.js).
+ * A new recipe without labels is not one: the labeller's call
+ * (worker/labels.js) brings its translation; an import's draft brings its own
+ * (worker/recipe-import.js, sent as recipe.translate in the same batch).
  */
 export async function applyOps(db, ctx, ops, hooks = {}) {
   const hh = ctx.householdId;
@@ -627,10 +659,13 @@ export async function applyOps(db, ctx, ops, hooks = {}) {
         results.push({ op_id: opId, ok: false, error: "not_found" });
         break;
       }
+      const now = new Date().toISOString();
+      // The text a translation is made of, before this op (an edit that changes it makes it stale).
+      const printBefore = op.type === "recipe.put" && state.recipes[op.id] && !state.recipes[op.id].deleted_at ? recipeFingerprint(state.recipes[op.id]) : null;
       let outcome;
       try {
         // The reviewer device's (the nightly check's) changes go into its changelog (auto_changes).
-        outcome = applyOp(state, op, { memberId: ctx.memberId, isAdmin: ctx.isAdmin, now: new Date().toISOString(), autoLog: ctx.role === "reviewer" });
+        outcome = applyOp(state, op, { memberId: ctx.memberId, isAdmin: ctx.isAdmin, now, autoLog: ctx.role === "reviewer" });
       } catch (e) {
         if (!(e instanceof OpError)) throw e;
         results.push({ op_id: opId, ok: false, error: e.code });
@@ -651,6 +686,14 @@ export async function applyOps(db, ctx, ops, hooks = {}) {
         if (hooks.unknownKind) for (const [kind, rowId] of outcome.changed) {
           const p = kind === "products" ? state.products[rowId] : null;
           if (p && !p.deleted_at && !p.kind) hooks.unknownKind.add(p.id);
+        }
+        if (hooks.untranslatedItems) for (const itemId of newItemsWithoutEnglish(state, outcome.changed, now)) hooks.untranslatedItems.add(itemId);
+        if (hooks.untranslatedRecipes && op.type === "recipe.put") {
+          const r = state.recipes[op.id];
+          // An edit that changed the text; a new recipe only when the labeller
+          // will not run for it (labels already set), since its call translates.
+          const changedText = printBefore ? r && recipeFingerprint(r) !== printBefore : r && r.labels_by;
+          if (changedText && needsTranslation(r)) hooks.untranslatedRecipes.add(r.id);
         }
         break;
       } catch (e) {

@@ -13,6 +13,7 @@ import { CUISINES, MAIN_INGREDIENTS, TIME_CLASSES, MEALS, LABEL_FIELDS, sortMeal
 import { queueLabel } from "./labels.js";
 import { recipeProductButton } from "./recipe.js";
 import { importBlock } from "./recipe-import.js";
+import { LANGS, otherLang, recipeFingerprint } from "../shared/bilingual.js";
 
 function ingredientsToText(ings) {
   return ings.map((i) => (i.heading ? `${i.name}:` : i.raw || [formatAmount(i), i.name, i.note ? `(${i.note})` : ""].filter(Boolean).join(" "))).join("\n");
@@ -96,6 +97,25 @@ export function mountEditor(root, id) {
     removePhoto.hidden = !key;
   }
 
+  // The recipe's text as the form holds it, as the save sends it.
+  const formText = () => {
+    const parsed = parseRecipeText(ings.value);
+    const extraNotes = parsed.notes && !notes.value.includes(parsed.notes) ? parsed.notes : "";
+    return {
+      parsed,
+      title: name.value,
+      ingredients: parsed.ingredients,
+      steps: steps.value.split("\n").map((s) => s.trim()).filter(Boolean),
+      notes: [notes.value.trim(), extraNotes].filter(Boolean).join("\n"),
+    };
+  };
+  // The import's translation into the other language (0029, same Claude
+  // call) and the fingerprint of the draft it translates: saved after the
+  // recipe; changed before saving, it is stale and the worker makes a new one.
+  let draftLang = null;
+  let draftTranslation = null;
+  let draftPrint = null;
+
   // A draft from photos or a web page (public/app/recipe-import.js) fills
   // the form; nothing is saved until the person taps save.
   const applyDraft = (d) => {
@@ -112,6 +132,9 @@ export function mountEditor(root, id) {
     mealToggles.forEach((b, i) => b.setAttribute("aria-pressed", String(meals.has(MEALS[i]))));
     labelsNote.textContent = labelsNoteText(importedLabels ? "claude" : null);
     showPreview();
+    draftLang = LANGS.includes(d.lang) ? d.lang : null;
+    draftTranslation = draftLang && d.translation?.title ? d.translation : null;
+    draftPrint = draftTranslation ? recipeFingerprint(formText()) : null;
   };
   const file = h("input", {
     type: "file", accept: "image/*", class: "sr", id: "photo-file",
@@ -131,8 +154,8 @@ export function mountEditor(root, id) {
 
   const save = async (e) => {
     e.preventDefault();
-    const parsed = parseRecipeText(ings.value);
-    const extraNotes = parsed.notes && !notes.value.includes(parsed.notes) ? parsed.notes : "";
+    const text = formText();
+    const { parsed } = text;
     const labels = Object.fromEntries(LABEL_FIELDS.map((f) => [f, labelValue(f)]));
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     const labelsChanged = LABEL_FIELDS.some((f) => !same(labels[f], existing?.[f] ?? null));
@@ -142,18 +165,23 @@ export function mountEditor(root, id) {
         type: "recipe.put",
         id: recipeId,
         recipe: {
-          title: name.value,
+          title: text.title,
           servings: servings.value ? Number(servings.value) : parsed.servings,
-          ingredients: parsed.ingredients,
-          steps: steps.value.split("\n").map((s) => s.trim()).filter(Boolean),
-          notes: [notes.value.trim(), extraNotes].filter(Boolean).join("\n"),
+          ingredients: text.ingredients,
+          steps: text.steps,
+          notes: text.notes,
+          ...(draftLang && !existing ? { lang: draftLang } : {}),
           nutrition: existing?.nutrition ?? parsed.nutrition,
           photo,
           source_url: source.value.trim() || null,
           ...(labelsChanged ? { ...labels, labels_by: labelsAsImported ? "claude" : "person" } : {}),
         },
       });
-      // Nobody labelled it yet: Claude does, once it is on the server.
+      if (draftTranslation && !existing) {
+        await store.dispatch({ type: "recipe.translate", id: recipeId,
+          translation: { ...draftTranslation, lang: otherLang(draftLang), of: draftPrint, by: "claude" } });
+      }
+      // Nobody labelled it yet: Claude does, once it is on the server (and translates it in the same call).
       if (!labelsChanged && !labelsBy) queueLabel(recipeId);
       location.hash = `#/recipe/${recipeId}`;
     } catch (err) {

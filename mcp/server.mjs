@@ -31,6 +31,7 @@ import { compactKey } from "../public/shared/item-names.js";
 import { findItem } from "../public/shared/ops.js";
 import { listTargets, itemFinder } from "../public/shared/ingredient-match.js";
 import { addDays } from "../public/shared/shelf-life.js";
+import { localName, shownRecipe, recipeLang, otherLang } from "../public/shared/bilingual.js";
 
 /** kitchen_recent_purchases: candidate items per purchase, and the output size (Claude cannot read more). */
 const CANDIDATES_MAX = 15;
@@ -177,8 +178,15 @@ function preferredText(data, e) {
     .join("; ");
 }
 
-function entryLine(e, members) {
-  const parts = [e.title];
+/**
+ * "lang": "en" on the read tools (0029): item names and recipes in English
+ * where the household has an English version, else as stored. Default Dutch.
+ */
+const LANG_PROPERTY = { type: "string", enum: ["nl", "en"], description: "'en' shows item names and recipes in English where an English version exists; default Dutch" };
+const shown = (s, lang, name) => localName(s.view, lang, name);
+
+function entryLine(e, members, lang = "nl", s = null) {
+  const parts = [s ? shown(s, lang, e.title) : e.title];
   const amounts = (e.amounts ?? []).map(amountText).filter(Boolean).join(" + ");
   if (amounts) parts.push(amounts);
   if (e.sources?.length) parts.push(`for ${e.sources.map((s) => s.title).join(", ")}`);
@@ -194,15 +202,19 @@ function starsLine(stars, members) {
   return `${stars.average}/10 from ${stars.count} (${who})`;
 }
 
-function recipeSummary(r, stars = null, members = {}) {
+function recipeSummary(original, stars = null, members = {}, lang = "nl") {
+  const r = shownRecipe(original, lang).recipe;
   const ings = r.ingredients.filter((i) => !i.heading);
   const kind = !ings.length && !r.steps.length ? "idea (only a title)" : `${ings.length} ingredients, ${r.steps.length} steps`;
   const rated = starsLine(stars, members);
   return `- ${r.title}${r.servings ? ` (${r.servings} p)` : ""} — ${kind}${r.photo ? ", photo" : ""}${rated ? `, stars ${rated}` : ""}  [id: ${r.id}]`;
 }
 
-function recipeFull(r, stars = null, members = {}) {
+function recipeFull(original, stars = null, members = {}, lang = "nl") {
+  const view = shownRecipe(original, lang);
+  const r = view.recipe;
   const lines = [`# ${r.title}`, r.servings ? `Serves ${r.servings}` : "Servings not set"];
+  lines.push(`Written in ${recipeLang(original) === "en" ? "English" : "Dutch"}${view.translated ? "; shown in its English translation" : original.translation ? (view.stale ? "; its translation is out of date" : "; it has a translation") : "; no translation yet"}`);
   lines.push(`Stars: ${starsLine(stars, members) ?? "none yet"}`);
   if (r.nutrition?.carbs_g != null) lines.push(`Carbs per serving (from the source): ${r.nutrition.carbs_g} g`);
   lines.push("", "Ingredients:");
@@ -309,9 +321,10 @@ const TOOLS = [
       properties: {
         include_cart: { type: "boolean", description: "Also list what is checked off in the cart" },
         store: { type: "string", description: "The store being shopped at, e.g. 'AH' or 'Dirk'" },
+        lang: LANG_PROPERTY,
       },
     },
-    async run({ include_cart = false, store = "" }) {
+    async run({ include_cart = false, store = "", lang = "nl" }) {
       const s = await state();
       const shop = canonicalStore(store) || null;
       const deals = currentOffers(s.data.offers, localToday());
@@ -320,7 +333,7 @@ const TOOLS = [
       const cart = s.entries.filter((e) => e.checked_at);
       const out = [`To get (${open.length})${shop ? ` at ${shop}` : ""}:`];
       for (const e of open) {
-        out.push(entryLine(e, s.members));
+        out.push(entryLine(e, s.members, lang, s));
         const resolved = resolveProduct(s.data, e, shop);
         if (resolved?.onlyAt) {
           // Sold at one store only: "haal bij Lidl", whatever store is chosen.
@@ -339,7 +352,7 @@ const TOOLS = [
         if (prices) out.push(`    shelf prices: ${prices}`);
       }
       out.push("", `In the cart: ${cart.length}`);
-      if (include_cart) out.push(...cart.map((e) => entryLine(e, s.members)));
+      if (include_cart) out.push(...cart.map((e) => entryLine(e, s.members, lang, s)));
       return out.join("\n");
     },
   },
@@ -414,25 +427,26 @@ const TOOLS = [
   {
     name: "kitchen_recipes_search",
     description: "Search the recipe book by title or ingredient. Without a query: every recipe. Ideas (only a title) are marked. Each recipe shows the household's stars (0.5-10, average and per person); the best rated come first and low-rated ones (under 6) last, so suggest from the top.",
-    inputSchema: { type: "object", properties: { query: { type: "string" } } },
-    async run({ query = "" }) {
+    inputSchema: { type: "object", properties: { query: { type: "string" }, lang: LANG_PROPERTY } },
+    async run({ query = "", lang = "nl" }) {
       const s = await state();
       const q = nameKey(query);
       const hits = s.recipes
-        .filter((r) => !q || nameKey(r.title).includes(q) || r.ingredients.some((i) => nameKey(i.name).includes(q)))
+        .filter((r) => !q || nameKey(r.title).includes(q) || nameKey(shownRecipe(r, "en").recipe.title).includes(q)
+          || nameKey(shownRecipe(r, "nl").recipe.title).includes(q) || r.ingredients.some((i) => nameKey(i.name).includes(q)))
         // Rated recipes by their average, unrated as a neutral 6: low-rated ones sink.
         .sort((a, b) => (s.recipeStars.get(b.id)?.average ?? STARS_NEUTRAL) - (s.recipeStars.get(a.id)?.average ?? STARS_NEUTRAL) || a.title.localeCompare(b.title, "nl"));
-      return hits.length ? `${hits.length} recipe${hits.length === 1 ? "" : "s"}:\n${hits.map((r) => recipeSummary(r, s.recipeStars.get(r.id), s.members)).join("\n")}` : "Nothing found.";
+      return hits.length ? `${hits.length} recipe${hits.length === 1 ? "" : "s"}:\n${hits.map((r) => recipeSummary(r, s.recipeStars.get(r.id), s.members, lang)).join("\n")}` : "Nothing found.";
     },
   },
   {
     name: "kitchen_recipe_get",
-    description: "One recipe in full: the household's stars, ingredients with amounts, steps, notes.",
-    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
-    async run({ id }) {
+    description: "One recipe in full: the household's stars, ingredients with amounts, steps, notes, and which language it is written in. With lang 'en' (or 'nl') it is shown in that language when a current translation exists.",
+    inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" }, lang: LANG_PROPERTY } },
+    async run({ id, lang }) {
       const s = await state();
       const r = s.recipes.find((x) => x.id === id);
-      return r ? recipeFull(r, s.recipeStars.get(r.id), s.members) : "No recipe with that id.";
+      return r ? recipeFull(r, s.recipeStars.get(r.id), s.members, lang ?? recipeLang(r)) : "No recipe with that id.";
     },
   },
   {
@@ -449,6 +463,12 @@ const TOOLS = [
         notes: { type: "string", description: "Tips or variations, no URL" },
         source_url: { type: "string" },
         photo_url: { type: "string" },
+        lang: { type: "string", enum: ["nl", "en"], description: "The language the recipe is written in" },
+        translation: {
+          type: "object",
+          description: "The same recipe in the other language (English for a Dutch recipe, Dutch for an English one), written by you: title, every ingredient line in the same order, every step, the notes. Give it whenever you save the text, so the app shows both languages without a paid call.",
+          properties: { title: { type: "string" }, ingredients: { type: "array", items: { type: "string" } }, steps: { type: "array", items: { type: "string" } }, notes: { type: "string" } },
+        },
       },
     },
     async run(args) {
@@ -468,7 +488,14 @@ const TOOLS = [
           photoNote = ` Photo not added (${e.message}).`;
         }
       }
-      await send([{ type: "recipe.put", id, recipe }]);
+      if (args.lang === "nl" || args.lang === "en") recipe.lang = args.lang;
+      const ops = [{ type: "recipe.put", id, recipe }];
+      // Translated by the caller (0029): saved with the text it translates; without `of` the engine takes the recipe as it now is.
+      if (args.translation?.title) {
+        const lang = args.lang === "nl" || args.lang === "en" ? otherLang(args.lang) : undefined;
+        ops.push({ type: "recipe.translate", id, translation: { ...args.translation, ...(lang ? { lang } : {}), by: "claude" } });
+      }
+      await send(ops);
       const n = recipe.ingredients?.filter((i) => !i.heading).length;
       return `${args.id ? "Updated" : "Created"}: ${args.title ?? "recipe"}${n !== undefined ? `, ${n} ingredients` : ""}${recipe.steps ? `, ${recipe.steps.length} steps` : ""}.${photoNote} [id: ${id}]`;
     },
@@ -512,21 +539,21 @@ const TOOLS = [
   {
     name: "kitchen_due_items",
     description: "What the household usually buys again and is due now (or soon), from the purchase history: per item the usual interval (median gap, from 3 purchases) and days since the last purchase. Things on the household's never-suggest list are never included, nor are things bought only for a recipe (cooking basics like oil and butter stay) or hidden in the app. Use it to suggest additions to the list; ask before adding.",
-    inputSchema: { type: "object", properties: { include_later: { type: "boolean", description: "Also list items that are not due yet" } } },
-    async run({ include_later = false }) {
+    inputSchema: { type: "object", properties: { include_later: { type: "boolean", description: "Also list items that are not due yet" }, lang: LANG_PROPERTY } },
+    async run({ include_later = false, lang = "nl" }) {
       const s = await state();
       // Without recipe ingredients (cooking basics stay) and without what was hidden; deals use the full list.
       const all = dueItems(s.view, localToday(), { visibleOnly: true });
       const shown = include_later ? all : all.filter((d) => d.due);
       if (!shown.length) return include_later ? "No regular purchases known yet." : "Nothing is due.";
-      return shown.map((d) => `- ${d.name}: last ${d.since} days ago, usually every ~${d.interval} days${d.due ? " (due)" : ""}${d.on_list ? " [on the list already]" : ""}${d.in_pantry ? " [still in the pantry]" : ""}`).join("\n");
+      return shown.map((d) => `- ${localName(s.view, lang, d.name)}: last ${d.since} days ago, usually every ~${d.interval} days${d.due ? " (due)" : ""}${d.on_list ? " [on the list already]" : ""}${d.in_pantry ? " [still in the pantry]" : ""}`).join("\n");
     },
   },
   {
     name: "kitchen_pantry_get",
     description: "What is in the house (the pantry): per thing the amount in packs or pieces (a fraction like 0.5 is half a pack), the pack size when known, and the use-by date (estimated or typed in), and how long the item keeps closed and once opened when known. Things to use up soon (use-by within 2 days or past) come first. Filled by ticking the list and by receipts, emptied by cooking and by 'op' / 'weggegooid'. Things used at a steady rate (cat food, filters, toothpaste) are counted down every day by their usage rate; the amount shown is what is left today, with the days left. Use it before suggesting groceries: do not suggest what is already there, and suggest recipes that use up what is due. Never contains anything on the household's never-suggest list.",
-    inputSchema: { type: "object", properties: {} },
-    async run() {
+    inputSchema: { type: "object", properties: { lang: LANG_PROPERTY } },
+    async run({ lang = "nl" } = {}) {
       const s = await state();
       const today = localToday();
       // What is left today: things used at a steady rate are counted down (never written daily).
@@ -543,7 +570,7 @@ const TOOLS = [
           ? `, keeps ${it.shelf_days === -1 ? "a long time" : `~${it.shelf_days} days`} closed${Number.isInteger(it.opened_days) ? `, ~${it.opened_days} days open` : ""}${it.shelf_source === "claude" ? " (estimated)" : ""}`
           : "";
         const usage = r.per_day > 0 ? `, used ~${rateEn(r.per_day)} (${rateBy(r.rate_source, it)}), ~${Math.floor(r.days_left ?? 0)} days left` : "";
-        return `- ${r.title}: ${displayAmount(r.amount)}${r.pack_size ? ` x ${r.pack_size}` : ""}, ${date}${usage}${thrown}${keeps}`;
+        return `- ${shown(s, lang, r.title)}: ${displayAmount(r.amount)}${r.pack_size ? ` x ${r.pack_size}` : ""}, ${date}${usage}${thrown}${keeps}`;
       };
       return [
         due.length ? `Use up soon:\n${due.map(line).join("\n")}` : "Nothing has to be used up soon.",
@@ -554,8 +581,8 @@ const TOOLS = [
   {
     name: "kitchen_low_stock",
     description: "What is running low in the pantry ('Bijna op', shown above the list in the app): things under their threshold (by default under a quarter pack; per item settable in the app, e.g. 'rijst: under 300 g', or switched off), things with too little left for a recipe that uses them (the one cooked with it most recently first), things counted down at a usage rate with less than a week of supply left, and things that ran out through cooking, 'op' or their countdown in the last week. Each with what is left and why. Never suggests excluded products, never what is on the list already. Use it when putting the groceries together: suggest these, ask before adding (kitchen_list_add with the item name shown).",
-    inputSchema: { type: "object", properties: {} },
-    async run() {
+    inputSchema: { type: "object", properties: { lang: LANG_PROPERTY } },
+    async run({ lang = "nl" } = {}) {
       const s = await state();
       const today = localToday();
       const lows = lowStock(s.deals, today);
@@ -569,7 +596,7 @@ const TOOLS = [
         if (!l.low_at && l.days_left !== null) return `${left(l)}, ~${Math.floor(l.days_left)} days left at ${rateEn(l.per_day)}`;
         return `${left(l)}, under ${l.low_at ?? `${LOW_DEFAULT} pack (the default)`}`;
       };
-      return lows.map((l) => `- ${l.title}${l.pack_size ? ` (pack ${l.pack_size})` : ""}: ${why(l)}`).join("\n");
+      return lows.map((l) => `- ${shown(s, lang, l.title)}${l.pack_size ? ` (pack ${l.pack_size})` : ""}: ${why(l)}`).join("\n");
     },
   },
   {
@@ -838,8 +865,8 @@ const TOOLS = [
   {
     name: "kitchen_deals",
     description: "The offers that meet the household's deal rules right now (the 'Deals' tab), plus, without a rule, current Albert Heijn and Dirk offers on what they buy often (3+ days in the past year), marked [you buy it often]; one that may not be their own product also says [check: they usually buy ...]. Per hit the item, store, deal, the real price per piece and per kg / l / piece in the pack, until when, which rule it meets, and [recommended: why] when the pantry or 'need it again' says they are probably low on it (those come first, then the biggest saving). Only Albert Heijn and Dirk unless the rule is 'worth a detour'. Never suggests excluded products. Also lists the rules. To put a hit on the list use kitchen_list_add with the item name and no note: the list line shows its current offers by itself, and an ended offer disappears.",
-    inputSchema: { type: "object", properties: {} },
-    async run() {
+    inputSchema: { type: "object", properties: { lang: LANG_PROPERTY } },
+    async run({ lang = "nl" } = {}) {
       const s = await state();
       const rules = liveRules(s.deals);
       const hits = dealsFor(s.deals, localToday());
@@ -849,7 +876,7 @@ const TOOLS = [
         const o = h.offer;
         const name = [o.brand && !nameKey(o.name).includes(nameKey(o.brand)) ? o.brand : null, o.name].filter(Boolean).join(" ");
         return [
-          `- ${h.often ? "[you buy it often] " : ""}${h.check ? (h.often ? `[check: they usually buy ${h.check[0]}] ` : `[check: is it ${h.check.join(" ")}?] `) : ""}${h.low ? `[recommended: ${LOW_EN[h.low.code](h.low)}] ` : ""}${h.item.name}: ${o.store}${isCoupon(o) ? " (Lidl Plus coupon: activate it in the app)" : ""}${h.detour ? " (detour)" : ""} · ${name}${o.size ? ` · ${o.size}` : ""} · ${o.deal ?? "folder price"} · ${effText(h.eff)} · until ${o.valid_until}`,
+          `- ${h.often ? "[you buy it often] " : ""}${h.check ? (h.often ? `[check: they usually buy ${h.check[0]}] ` : `[check: is it ${h.check.join(" ")}?] `) : ""}${h.low ? `[recommended: ${LOW_EN[h.low.code](h.low)}] ` : ""}${shown(s, lang, h.item.name)}: ${o.store}${isCoupon(o) ? " (Lidl Plus coupon: activate it in the app)" : ""}${h.detour ? " (detour)" : ""} · ${name}${o.size ? ` · ${o.size}` : ""} · ${o.deal ?? "folder price"} · ${effText(h.eff)} · until ${o.valid_until}`,
           `  ${h.often ? `no rule: bought on ${h.bought} days in the past year, only on offer` : `rule: ${ruleText(h.rule)}${forProduct(h.rule)}`}`,
         ].join("\n");
       });

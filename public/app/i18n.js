@@ -2,8 +2,11 @@
 // public/i18n/en.json and nl.json; tools/map_check.py fails when a key is used
 // here but missing there, or present in one file and not the other.
 //
-// Recipes themselves stay in the language they were written in.
+// Recipes are written in one language and carry a translation into the other
+// (0029); items have an English name next to the Dutch one. itemName and
+// shownName pick by this language (public/shared/bilingual.js).
 import { formatQty } from "../shared/ingredients.js";
+import { itemLabel, localName, shownRecipe } from "../shared/bilingual.js";
 
 let dict = {};
 let fallback = {};
@@ -23,6 +26,15 @@ export async function setLocale(lang) {
 }
 
 export const getLocale = () => locale;
+
+/** An item's name in this language: its English name in English when it has one. */
+export const itemName = (item) => itemLabel(item, locale);
+
+/** A recipe's title in this language: its translation's when that is fresh. */
+export const recipeTitle = (r) => shownRecipe(r, locale).recipe?.title ?? r?.title ?? "";
+
+/** A Dutch item name (a line's title, a pantry row, "Bijna op") as shown in this language. */
+export const shownName = (view, name) => localName(view, locale, name);
 
 function lookup(obj, key) {
   return key.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), obj);

@@ -122,14 +122,18 @@ const CACHE = new WeakMap();
  */
 export function nameIndex(view, today) {
   const size = (rows) => Object.keys(rows ?? {}).length;
-  const sig = `${today}|${size(view.items)}|${size(view.aliases)}|${size(view.purchases)}`;
+  const english = Object.values(view.items ?? {}).reduce((n, i) => n + (i.name_en ? i.name_en.length : 0), 0);
+  const sig = `${today}|${size(view.items)}|${size(view.aliases)}|${size(view.purchases)}|${english}`;
   const hit = CACHE.get(view);
   if (hit && hit.sig === sig) return hit.list;
   const scores = purchaseScores(view.purchases, today);
   const byItem = new Map();
   for (const item of Object.values(view.items ?? {})) {
     if (item.deleted_at) continue;
-    byItem.set(item.id, { item, score: scores.get(item.id) ?? 0, names: [nameParts(item.name)] });
+    // Its English name (items.name_en, 0029) matches like another name, so "milk" finds Melk.
+    const names = [nameParts(item.name)];
+    if (item.name_en && nameKey(item.name_en) !== item.name_key) names.push({ ...nameParts(item.name_en), alias: true, en: true });
+    byItem.set(item.id, { item, score: scores.get(item.id) ?? 0, names });
   }
   for (const a of Object.values(view.aliases ?? {})) {
     if (a.deleted_at) continue;

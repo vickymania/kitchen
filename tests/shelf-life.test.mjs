@@ -185,6 +185,9 @@ function mockShelf(table, { status = 200 } = {}) {
   const original = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body);
+    // Only shelf requests count here; a new item's English name alone (0029) goes in its own Haiku request.
+    const shelf = Boolean(body.output_config.format.schema.properties.items?.items?.properties?.shelf_days);
+    if (!shelf) return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "{\"items\":[]}" }] }), { status });
     calls.push({ url: String(url), init, body });
     const lines = body.messages[0].content[0].text.split("\n").map((l) => l.match(/^(\d+)\. ([^(]+?)(?: \(|$)/)).filter(Boolean);
     const items = lines.map(([, n, name]) => ({ n: Number(n), shelf_days: table[name]?.[0] ?? 3, opened_days: table[name]?.[1] ?? 0, kind: "test" }));

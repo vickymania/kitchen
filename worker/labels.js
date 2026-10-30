@@ -9,6 +9,7 @@
 import { CUISINES, MAIN_INGREDIENTS, TIME_CLASSES, MEALS, timeClassOf, sortMeals } from "../public/shared/labels.js";
 import { fromRow, applyOps } from "./ops-store.js";
 import { askClaude, takeOne } from "./claude.js";
+import { needsTranslation, recipeLang, otherLang, recipeFingerprint, TRANSLATION_SCHEMA, translateInstruction } from "../public/shared/bilingual.js";
 
 export const LABEL_DAILY_LIMIT = 100;   // labellings per household per day; the one-time pass is ~60
 export const GUEST_LABEL_DAILY_LIMIT = 20;    // per recipes-only person per day
@@ -47,7 +48,7 @@ const PROMPT = [
   "Count oven or simmering time in time_minutes.",
 ].join("\n");
 
-function recipeText(r) {
+function recipeText(r, { notes = false } = {}) {
   const ings = (r.ingredients ?? []).map((i) => (i.heading ? `${i.name}:` : i.raw || i.name)).slice(0, 80);
   const steps = (r.steps ?? []).slice(0, 40).map((s, i) => `${i + 1}. ${s}`);
   return [
@@ -55,8 +56,20 @@ function recipeText(r) {
     r.servings ? `Servings: ${r.servings}` : null,
     ings.length ? `Ingredients:\n${ings.join("\n")}` : "Ingredients: (none written down)",
     steps.length ? `Steps:\n${steps.join("\n")}` : "Steps: (none written down)",
-  ].filter(Boolean).join("\n\n").slice(0, 12000);
+    notes && r.notes ? `Notes:\n${r.notes}` : null,
+  ].filter(Boolean).join("\n\n").slice(0, notes ? 16000 : 12000);
 }
+
+/**
+ * The labels and, in the same call, the recipe's translation (0029: a new
+ * recipe's one Sonnet call brings both; Thomas, 30-10-2026: never a second
+ * call where one already happens).
+ */
+export const LABEL_TRANSLATE_SCHEMA = {
+  ...LABEL_SCHEMA,
+  required: [...LABEL_SCHEMA.required, "translation"],
+  properties: { ...LABEL_SCHEMA.properties, translation: TRANSLATION_SCHEMA },
+};
 
 /** Claude's meals, checked against the vocabulary: the fixed order, or null. */
 export function mealsOf(answer) {
@@ -112,11 +125,16 @@ export async function labelRecipe(env, who, body) {
     : await takeOne(env, "label", who.householdId, LABEL_DAILY_LIMIT);
   if (!took) return { status: 429, error: "too_many_labels" };
 
+  // No translation yet (or one of another version): it comes in this call too.
+  const translate = !onlyMeals && needsTranslation(recipe);
+  const to = otherLang(recipeLang(recipe));
   const out = await askClaude(env, {
     what: "recipe label",
-    schema: onlyMeals ? MEALS_SCHEMA : LABEL_SCHEMA,
-    maxTokens: 1000,
-    content: [{ type: "text", text: `${PROMPT}\n\n${recipeText(recipe)}` }],
+    schema: onlyMeals ? MEALS_SCHEMA : translate ? LABEL_TRANSLATE_SCHEMA : LABEL_SCHEMA,
+    maxTokens: translate ? 8000 : 1000,
+    content: [{ type: "text", text: translate
+      ? `${PROMPT}\n${translateInstruction(to)}\n\n${recipeText(recipe, { notes: true })}`
+      : `${PROMPT}\n\n${recipeText(recipe)}` }],
   });
   if (out.failed === "rate_limited") return { status: 429, error: "too_many_labels" };
   if (out.failed) return { status: 502, error: "label_failed" };
@@ -127,7 +145,12 @@ export async function labelRecipe(env, who, body) {
   // meals only, the meals) in the meantime, it refuses (labels_by_person) and
   // nothing is written.
   const opId = `label-${crypto.randomUUID()}`;
-  const [result] = await applyOps(env.DB, who, [{ type: "recipe.put", op_id: opId, id, recipe: patch }]);
+  const tr = translate ? out.answer?.translation : null;
+  // The translation of the version that was sent: an edit made meanwhile keeps it stale.
+  const translation = tr && typeof tr === "object" && typeof tr.title === "string" && tr.title.trim()
+    ? [{ type: "recipe.translate", op_id: `tr-${crypto.randomUUID()}`, id, translation: { ...tr, lang: to, of: recipeFingerprint(recipe), by: "claude" } }]
+    : [];
+  const [result, translated] = await applyOps(env.DB, who, [{ type: "recipe.put", op_id: opId, id, recipe: patch }, ...translation]);
   if (!result.ok) return { status: result.error === "labels_by_person" ? 409 : 400, error: result.error };
-  return { labels: patch };
+  return { labels: patch, translated: Boolean(translated?.ok) };
 }

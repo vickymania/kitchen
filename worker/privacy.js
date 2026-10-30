@@ -10,7 +10,7 @@ import { offerMatches, productOfferMatches } from "../public/shared/offers.js";
 // Items private to someone else, their products, and their other names: one
 // statement (a handful of rows; items_private is a partial index).
 const HIDDEN_SQL = `
-SELECT 'i' AS k, id, name, name_key AS a, NULL AS b, NULL AS c, NULL AS item_id FROM items
+SELECT 'i' AS k, id, name, name_key AS a, name_en_key AS b, NULL AS c, NULL AS item_id FROM items
  WHERE household_id = ?1 AND private_to IS NOT NULL AND private_to <> ?2
 UNION ALL
 SELECT 'p', p.id, p.name, p.brand, p.size, p.product_key, p.item_id FROM products p JOIN items i ON i.id = p.item_id
@@ -34,6 +34,8 @@ export function hiddenOf(rows = []) {
     if (r.k === "i") {
       items.add(r.id);
       if (r.a) names.add(r.a);
+      // Its English name (0029) names it too: in text, offers and typed names.
+      if (r.b) names.add(r.b);
     } else if (r.k === "p") {
       products.set(r.id, { id: r.id, name: r.name, brand: r.a, size: r.b, product_key: r.c, item_id: r.item_id });
     } else if (r.k === "a" && r.a) {
@@ -145,7 +147,7 @@ export function guardOp(state, op, hidden, find) {
     const hit = find(state, key);
     if (hit && hidden.items.has(hit.id)) return "not_found";
     const compact = key.replace(/ /g, "");
-    if (Object.values(state.items).some((i) => hidden.items.has(i.id) && i.name_key?.replace(/ /g, "") === compact)) return "not_found";
+    if (Object.values(state.items).some((i) => hidden.items.has(i.id) && (i.name_key?.replace(/ /g, "") === compact || i.name_en_key?.replace(/ /g, "") === compact))) return "not_found";
     if (Object.values(state.aliases ?? {}).some((a) => hidden.items.has(a.item_id) && a.name_key?.replace(/ /g, "") === compact)) return "not_found";
   }
   for (const [kind, rows] of Object.entries(state)) {

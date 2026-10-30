@@ -5,7 +5,7 @@
 // "Bijna op" (public/shared/low-stock.js): the strip above the list, the low
 // rows marked here, and "waarschuw onder…" per row.
 import { h, title, toast, sheet, newId, fill, svg, CHECK_SVG } from "./dom.js";
-import { t, getLocale } from "./i18n.js";
+import { t, getLocale, shownName } from "./i18n.js";
 import { formatQty, parseListInput, parseAmount } from "../shared/ingredients.js";
 import { OpError } from "../shared/ops.js";
 import { pantryGroups, displayAmount, daysLeft, wasteCounts, fromEntry, packSize, parseLowAt, LOW_AT_MAX, withUsage, rowRate, liveRows, supplyDays, RATE_MAX } from "../shared/pantry.js";
@@ -411,7 +411,7 @@ export function lowStrip(view, today, rerender) {
   if (!lows.length) return null;
   const shown = stripOpen ? lows : lows.slice(0, STRIP_ROWS);
   const line = (l) => h("li", { class: "low-row" },
-    h("span", { class: "low-name" }, l.name),
+    h("span", { class: "low-name" }, shownName(view, l.name)),
     h("span", { class: "low-why mono" }, lowReasonText(l, today)),
     h("span", { class: "low-acts" },
       h("button", { type: "button", class: "btn ghost mono low-add", onclick: () => lowToList(l) }, t("low.add")),
@@ -446,7 +446,7 @@ async function notYet(n) {
   const op = notYetOp(store.getView(), today, n, newId);
   try {
     await store.dispatch(op);
-    toast(t(op.type === "item.not_yet" ? "soon.back_in" : "soon.more_left", { name: n.name, n: NOT_YET_DAYS }));
+    toast(t(op.type === "item.not_yet" ? "soon.back_in" : "soon.more_left", { name: shownName(store.getView(), n.name), n: NOT_YET_DAYS }));
   } catch (err) {
     refused(err);
   }
@@ -486,10 +486,10 @@ export function soonSection(view, today) {
     h("ul", { class: "entries" }, soon.map((n) => h("li", { class: "entry line soon-line" },
       h("button", {
         type: "button", class: "tick", role: "checkbox", "aria-checked": "false",
-        "aria-label": t("list.tick", { title: n.name }), onclick: () => tickSoon(n),
+        "aria-label": t("list.tick", { title: shownName(view, n.name) }), onclick: () => tickSoon(n),
       }, h("span", { class: "box" }, svg(CHECK_SVG))),
       h("div", { class: "line-main" },
-        h("span", { class: "ttl" }, n.name),
+        h("span", { class: "ttl" }, shownName(view, n.name)),
         h("button", { type: "button", class: "btn ghost mono soon-not-yet", onclick: () => notYet(n) }, t("soon.not_yet")),
         h("span", { class: "short mono" }, soonText(n, today)))))));
 }
@@ -566,7 +566,7 @@ function row(r, today, waste, view, lows) {
   const low = lows.get(stockKey(r, view.items));
   return h("li", { class: `entry stock${late ? " late" : days !== null && days <= 2 ? " soon" : ""}${low ? " low" : ""}` },
     h("span", { class: "box amt-box mono", "aria-label": t("pantry.amount") }, packsText(r.amount)),
-    h("span", { class: "ttl" }, r.title),
+    h("span", { class: "ttl" }, shownName(view, r.title)),
     h("span", { class: "amt" }),
     h("span", { class: "meta" }, meta),
     low ? h("span", { class: "low-mark mono" }, `${t("low.title")} · ${lowReasonText(low, today)}${low.listed ? ` · ${t("low.on_list")}` : ""}`) : null,

@@ -43,13 +43,22 @@ export function itemsNamed(state, key) {
     const hit = a.name_key === key ? exact : a.name_key.replace(/ /g, "") === compact ? loose : null;
     if (hit) add(hit, aliasTarget(state.items, state.items[a.item_id]));
   }
-  return { exact: [...exact.values()], compact: [...loose.values()] };
+  // English names (items.name_en, 0029): like an alias, but not unique, so
+  // they are kept apart and trusted only after every Dutch name.
+  const english = new Map();
+  for (const i of Object.values(state.items)) {
+    if (i.deleted_at || !i.name_en_key) continue;
+    if (i.name_en_key === key) add(english, i);
+    else if (i.name_en_key.replace(/ /g, "") === compact) add(loose, i);
+  }
+  return { exact: [...exact.values()], compact: [...loose.values()], english: [...english.values()] };
 }
 
 /**
  * The item a name means: the live item with that key, else an alias of that
  * name (an explicit one, item.alias, or a name merged away, item.merge), else
- * the one item whose name or alias is the same without spaces. Two different
+ * the one item with that English name (items.name_en; shared by two: null),
+ * else the one item whose name, alias or English name is the same without spaces. Two different
  * items that differ only in spaces are ambiguous: null, never a guess. Every
  * op that takes a title (a receipt's purchase.add, entry.add, entry.update,
  * preference.set, deal_rule.set, item.rate, pantry.add, item.merge,
@@ -59,8 +68,10 @@ export function findItem(state, key) {
   if (!key) return null;
   const live = Object.values(state.items).find((i) => !i.deleted_at && i.name_key === key);
   if (live) return live;
-  const { exact, compact } = itemsNamed(state, key);
+  const { exact, compact, english } = itemsNamed(state, key);
   if (exact.length) return exact[0];
+  // An English name (items.name_en) that one item has; two items with it: neither.
+  if (english.length) return english.length === 1 ? english[0] : null;
   return compact.length === 1 ? compact[0] : null;
 }
 

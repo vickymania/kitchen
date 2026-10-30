@@ -3,7 +3,7 @@
 // seconds); a tap on the rest of the line opens its details. The basket sits
 // on top until someone clears it, so a mistap can be undone.
 import { h, title, toast, sheet, confirmSheet, newId, svg, CHECK_SVG, fill } from "./dom.js";
-import { t, formatAmounts, getLocale } from "./i18n.js";
+import { t, formatAmounts, getLocale, shownName, recipeTitle } from "./i18n.js";
 import { parseListInput, parseAmount } from "../shared/ingredients.js";
 import { OpError } from "../shared/ops.js";
 import * as store from "./store.js";
@@ -175,7 +175,7 @@ function lineDetails(e, view, me, resolved, price, offers, cheaper) {
       resolved ? row(t("list.d_store"), resolved.onlyAt ? onlyAtLine(resolved.onlyAt) : (resolved.why.store || resolved.product.store || t("list.anywhere"))) : null,
       amount ? row(t("list.amount"), amount) : null,
       ownNote(e) ? row(t("list.note"), ownNote(e)) : null,
-      e.sources?.length ? row(t("list.d_recipes"), t("list.for", { recipes: e.sources.map((s) => s.title).join(", ") })) : null,
+      e.sources?.length ? row(t("list.d_recipes"), t("list.for", { recipes: e.sources.map((s) => (view.recipes?.[s.recipe_id] ? recipeTitle(view.recipes[s.recipe_id]) : s.title)).join(", ") })) : null,
       offers.length ? row(t("list.d_offers"), offers) : null,
       prices ? row(t("prices.label"), prices) : null,
       cheaper ? row(t("list.d_cheaper"), cheaperLine(cheaper)) : null,
@@ -211,7 +211,7 @@ async function openRule(e) {
 async function removeEntry(e) {
   try {
     await store.dispatch({ type: "entry.delete", id: e.id });
-    toast(t("remove.done", { title: e.title }), {
+    toast(t("remove.done", { title: shownName(store.getView(), e.title) }), {
       action: t("remove.undo"), ms: 7000,
       onAction: () => store.dispatch({
         type: "entry.add", id: newId(), item_id: e.item_id ?? newId(), title: e.title, amounts: e.amounts ?? [], note: e.note ?? "",
@@ -260,23 +260,25 @@ function entryRow({ entry: e, resolved }, ctx) {
   const fresh = !checked && Boolean(e.new_item);
   const typed = e.typed && compactKey(e.typed) !== compactKey(e.title) ? e.typed : null;
   const meant = fresh ? didYouMean(view, e.typed || e.title, e.item_id, { today: localToday() }) : null;
+  // The item's name in this phone's language (0029: its English name in English).
+  const name = shownName(view, e.title);
   return h("li", { class: `entry line${checked ? " checked" : ""}${isOpen ? " open" : ""}`, id: `entry-${e.id}` },
     h("button", {
       type: "button", class: "tick", role: "checkbox", "aria-checked": String(checked),
-      "aria-label": t(checked ? "list.untick" : "list.tick", { title: e.title }), onclick: tick,
+      "aria-label": t(checked ? "list.untick" : "list.tick", { title: name }), onclick: tick,
     }, h("span", { class: "box" }, svg(CHECK_SVG))),
     h("button", { type: "button", class: "line-main", "aria-expanded": String(isOpen), onclick: toggleOpen },
-      h("span", { class: "ttl" }, e.title, privateMark(view, e.item_id), fresh ? h("span", { class: "new-tag mono" }, t("names.new")) : null),
+      h("span", { class: "ttl" }, name, privateMark(view, e.item_id), fresh ? h("span", { class: "new-tag mono" }, t("names.new")) : null),
       h("span", { class: "amt" }, formatAmounts(e.amounts)),
-      typed ? h("span", { class: "typed mono" }, t("names.typed", { text: typed })) : null,
+      typed && typed !== name ? h("span", { class: "typed mono" }, t("names.typed", { text: typed })) : null,
       shortLine(e, resolved),
       !isOpen && mine.length ? dealLine(mine, { mine: true }) : null,
       !isOpen && named.length ? dealLine(named) : null,
       !isOpen && cheaper ? cheaperLine(cheaper) : null),
     // × (30-10-2026): a line added by mistake goes, one tap, with undo.
-    checked ? null : h("button", { type: "button", class: "del", "aria-label": t("remove.aria", { title: e.title }), onclick: () => removeEntry(e) }, "×"),
+    checked ? null : h("button", { type: "button", class: "del", "aria-label": t("remove.aria", { title: name }), onclick: () => removeEntry(e) }, "×"),
     meant ? h("button", { type: "button", class: "meant mono", onclick: () => relink(e, meant.item) },
-      t("names.did_you_mean", { name: meant.item.name })) : null,
+      t("names.did_you_mean", { name: shownName(view, meant.item.name) })) : null,
     isOpen ? lineDetails(e, view, me, resolved, price, offers, cheaper) : null);
 }
 

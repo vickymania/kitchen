@@ -9,7 +9,7 @@ import { h, title, toast, newId, fill, sheet } from "./dom.js";
 import { t } from "./i18n.js";
 import { api, isOffline } from "./api.js";
 import { nameKey } from "../shared/ingredients.js";
-import { OpError, productKey } from "../shared/ops.js";
+import { OpError, productKey, findItem } from "../shared/ops.js";
 import { isExcluded } from "../shared/excluded.js";
 import { localToday } from "../shared/intervals.js";
 import * as store from "./store.js";
@@ -262,6 +262,13 @@ export function mountReceipt(root) {
           pantry: true,
           ...(recipeOnly ? { prefer_recipe_id: recipeOnly } : { prefer: keep }),
         });
+      }
+      // A line that made (or is) the item of its own name: the English name the
+      // receipt read gave it (0029, the same call), unless the item has one.
+      for (const l of products) {
+        if (!l.name_en || nameKey(l.item) !== nameKey(l.name)) continue;
+        const item = findItem(store.getView(), nameKey(l.item));
+        if (item && !item.name_en) await store.dispatch({ type: "item.translate", item_id: item.id, name_en: l.name_en, source: "claude" });
       }
       saveDraft(null);
       toast(t("receipt.saved", { n: products.length, checked }));

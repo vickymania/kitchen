@@ -47,6 +47,9 @@
     "facet": { "meal": "Meal", "cuisine": "Cuisine", "main": "Main ingredient", "time": "Time" }
   },
   "recipe": {
+    "original": "Original",
+    "translated": "Translation",
+    "translation_stale": "Translation follows",
     "unlinked": "Not linked: {reason}.",
     "unlinked_aria": "Why not linked?",
     "minutes": "{n} min",
@@ -381,6 +384,8 @@
     "reason": "★{stars}"
   },
   "review": {
+    "change_translate": "{name} is called {target} in English",
+    "undo_translate": "Undo: open the product, English name.",
     "change_recipe": "{name}: {linked} of {total} ingredients linked",
     "undo_recipe": "Something wrong? Say so and I will fix it.",
     "link_to": "'{name}' → {item} ({how})",
@@ -666,6 +671,10 @@
     "mark": "Only for you"
   },
   "names": {
+    "english": "English name",
+    "english_none": "none yet",
+    "english_edit": "Change",
+    "english_title": "{item} in English",
     "new": "New",
     "did_you_mean": "Did you mean {name}?",
     "link": "Link to…",

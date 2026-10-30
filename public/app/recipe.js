@@ -2,7 +2,8 @@
 // the method, and the two things you do with a recipe: put it on the list,
 // or cook it.
 import { h, title, toast, sheet, newId, fill } from "./dom.js";
-import { t, formatAmount, formatNumber } from "./i18n.js";
+import { t, formatAmount, formatNumber, getLocale } from "./i18n.js";
+import { shownRecipe } from "../shared/bilingual.js";
 import { scaleIngredient, amountOf } from "../shared/ingredients.js";
 import { currentLinks, FROM_THE_TAP } from "../shared/recipe-links.js";
 import * as store from "./store.js";
@@ -90,6 +91,18 @@ function lastEaten(view, recipe) {
 // Servings picked with the stepper, per recipe, for as long as the app is
 // open. Cook mode and "add to list" use the same number.
 const chosen = new Map();
+
+// "Origineel" tapped: these recipes show their original, for as long as the app is open.
+const original = new Set();
+
+/**
+ * The recipe as this phone shows it (0029): the translation into the phone's
+ * language when there is a fresh one, unless "Origineel" was tapped. Cooking,
+ * the list and the pantry always use the original object itself.
+ */
+export function displayed(recipe) {
+  return shownRecipe(recipe, getLocale(), { original: original.has(recipe?.id) });
+}
 
 export function servingsFor(recipe) {
   return chosen.get(recipe.id) ?? recipe.servings ?? null;
@@ -224,6 +237,14 @@ export function mountRecipe(root, id) {
     }
     const n = servingsFor(r);
     const ings = r.ingredients.filter((i) => !i.heading).length;
+    // What is read: the translation in this phone's language, or the original.
+    const shown = displayed(r);
+    const d = shown.recipe;
+    const toggle = shown.canToggle
+      ? h("button", { type: "button", class: "btn ghost mono lang-toggle", "aria-pressed": String(!shown.translated),
+        onclick: () => { if (original.has(r.id)) original.delete(r.id); else original.add(r.id); render(store.getView(), store.getStatus()); } },
+      t(shown.translated ? "recipe.original" : "recipe.translated"))
+      : shown.stale ? h("span", { class: "mono mute" }, t("recipe.translation_stale")) : null;
     const stepper = r.servings
       ? h("div", { class: "stepper", role: "group", "aria-label": t("recipe.servings_label") },
         h("button", { type: "button", "aria-label": t("recipe.fewer"), onclick: () => { if (n > 1) { chosen.set(r.id, n - 1); render(store.getView(), store.getStatus()); } } }, "−"),
@@ -242,13 +263,14 @@ export function mountRecipe(root, id) {
           ings ? h("span", {}, h("b", {}, t("recipe.ingredient_count", { n: ings }))) : null,
           r.steps.length ? h("span", {}, t("recipe.step_count", { n: r.steps.length })) : null,
           syncLine(status)),
-        title(r.title, { long: r.title.length > 9 }),
+        title(d.title, { long: d.title.length > 9 }),
         r.photo ? h("figure", { class: "photo" }, h("img", { src: `/photos/${r.photo}`, alt: "" })) : null,
         h("div", { class: "facts" }, stepper,
           carbs !== null && carbs !== undefined
             ? h("span", { class: "mono" }, t("recipe.carbs", { g: formatNumber(carbs) }), h("span", { class: "mute" }, ` · ${t(r.nutrition.carbs_estimated ? "recipe.carbs_estimated" : "recipe.carbs_source")}`))
             : null,
-          lastEaten(view, r) ? h("span", { class: "mono mute" }, lastEaten(view, r)) : null),
+          lastEaten(view, r) ? h("span", { class: "mono mute" }, lastEaten(view, r)) : null,
+          toggle),
         labelsLine(r),
         recipeStarsLine(view, r),
         h("div", { class: "actions" },
@@ -259,12 +281,13 @@ export function mountRecipe(root, id) {
       h("div", { class: "wrap two" },
         h("div", {},
           h("div", { class: "section-head" }, h("h2", {}, t("recipe.ingredients"))),
-          ings ? ingredientList(r, guest ? null : currentLinks(r)) : h("p", { class: "empty" }, t("recipe.no_ingredients"))),
+          // The line marks belong to the original's lines: not on a translation.
+          ings ? ingredientList(d, guest || shown.translated ? null : currentLinks(r)) : h("p", { class: "empty" }, t("recipe.no_ingredients"))),
         h("div", {},
           h("div", { class: "section-head" }, h("h2", {}, t("recipe.method"))),
-          r.steps.length ? h("ol", { class: "steps" }, r.steps.map((s) => h("li", {}, s))) : h("p", { class: "empty" }, t("recipe.no_steps")),
-          r.notes ? h("div", { class: "section-head" }, h("h2", {}, t("recipe.notes"))) : null,
-          r.notes ? h("p", { class: "notes" }, r.notes) : null)),
+          d.steps.length ? h("ol", { class: "steps" }, d.steps.map((s) => h("li", {}, s))) : h("p", { class: "empty" }, t("recipe.no_steps")),
+          d.notes ? h("div", { class: "section-head" }, h("h2", {}, t("recipe.notes"))) : null,
+          d.notes ? h("p", { class: "notes" }, d.notes) : null)),
       h("footer", { class: "foot wrap mono" }, !r.source_url ? null
         : /^https?:\/\//i.test(r.source_url) ? h("a", { href: r.source_url, rel: "noopener noreferrer", target: "_blank" }, t("recipe.source"))
         : h("span", {}, t("recipe.credits", { who: r.source_url }))),

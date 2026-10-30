@@ -47,6 +47,9 @@
     "facet": { "meal": "Maaltijd", "cuisine": "Keuken", "main": "Hoofdingrediënt", "time": "Tijd" }
   },
   "recipe": {
+    "original": "Origineel",
+    "translated": "Vertaling",
+    "translation_stale": "Vertaling volgt",
     "unlinked": "Niet gekoppeld: {reason}.",
     "unlinked_aria": "Waarom niet gekoppeld?",
     "minutes": "{n} min",
@@ -381,6 +384,8 @@
     "reason": "★{stars}"
   },
   "review": {
+    "change_translate": "{name} heet in het Engels {target}",
+    "undo_translate": "Terug: open het product, Engelse naam.",
     "change_recipe": "{name}: {linked} van {total} ingrediënten gekoppeld",
     "undo_recipe": "Klopt iets niet? Zeg het, dan pas ik het aan.",
     "link_to": "'{name}' → {item} ({how})",
@@ -666,6 +671,10 @@
     "mark": "Alleen voor jou"
   },
   "names": {
+    "english": "Engelse naam",
+    "english_none": "nog geen",
+    "english_edit": "Wijzig",
+    "english_title": "{item} in het Engels",
     "new": "Nieuw",
     "did_you_mean": "Bedoel je {name}?",
     "link": "Koppel aan…",

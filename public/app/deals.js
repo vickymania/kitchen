@@ -4,7 +4,7 @@
 // offers live, public/shared/deals.js liveLineOffers). Also the "Deal-regel" sheet, opened from a list line's edit sheet and
 // the product screen. Rules: public/shared/deals.js and deal-math.js.
 import { h, title, toast, sheet, newId, fill } from "./dom.js";
-import { t, getLocale } from "./i18n.js";
+import { t, getLocale, itemName } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import { localToday } from "../shared/intervals.js";
 import { dealsFor, liveRules, ruleFor, REGULAR_STORES } from "../shared/deals.js";
@@ -251,14 +251,14 @@ function dealRow(hit, view, today, open) {
     try {
       // No note: the line shows its current offers live (liveLineOffers), so an ended one never stays behind.
       await store.dispatch({ type: "entry.add", id: newId(), item_id: newId(), title: hit.item.name });
-      toast(t("deals.added", { title: hit.item.name }), { action: t("add.open_list"), href: "#/" });
+      toast(t("deals.added", { title: itemName(hit.item) }), { action: t("add.open_list"), href: "#/" });
     } catch (err) {
       refused(err);
     }
   };
   return h("li", { class: `entry deal-hit${hit.low ? " rec" : ""}${hit.check ? " check" : ""}` },
     h("span", { class: "box plus", "aria-hidden": "true" }, hit.check ? "?" : hit.low ? "!" : "€"),
-    h("span", { class: "ttl" }, hit.item.name),
+    h("span", { class: "ttl" }, itemName(hit.item)),
     h("span", { class: "amt mono" }, hit.eff.piece_cents !== null ? money(Math.round(hit.eff.piece_cents)) : "", discountBadge(hit.eff.discount_pct)),
     hit.low ? h("span", { class: "rec-why mono" }, `${t("deals.recommended")} · ${lowText(hit.low, today)}`) : null,
     hit.often ? h("span", { class: "often-why mono" }, oftenText(hit)) : null,
@@ -282,7 +282,7 @@ function ruleRow(r, view) {
     onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); dealRuleSheet(item, preferred, { productFirst: Boolean(product) }); } },
   },
   h("span", { class: "box plus", "aria-hidden": "true" }, "⋯"),
-  h("span", { class: "ttl" }, item.name),
+  h("span", { class: "ttl" }, itemName(item)),
   h("span", { class: "amt" }),
   h("span", { class: "meta" }, [product ? shortLabel(product) : null, ruleSummary(r)].filter(Boolean).join(" — ")));
 }

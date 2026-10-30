@@ -69,6 +69,7 @@ const SHELL = [
   "/shared/recipe-links.js",
   "/shared/ingredients.js",
   "/shared/recipe-text.js",
+  "/shared/bilingual.js",
   "/shared/recipe-import.js",
   "/shared/ops.js",
   "/shared/excluded.js",

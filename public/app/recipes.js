@@ -1,7 +1,7 @@
 // recipes.vexed.works, the book: every recipe as a numbered ruled row, the
 // ones that are only a title (an idea, not yet written down) apart.
 import { h, title, fill, sheet } from "./dom.js";
-import { t, collator, formatNumber } from "./i18n.js";
+import { t, collator, formatNumber, recipeTitle } from "./i18n.js";
 import { nameKey } from "../shared/ingredients.js";
 import * as store from "./store.js";
 import { syncLine } from "./status.js";
@@ -55,7 +55,7 @@ function row(r, index, stars = new Map()) {
   return h("li", {},
     h("a", { class: "row", href: `#/recipe/${r.id}` },
       h("span", { class: "idx mono" }, String(index + 1).padStart(2, "0")),
-      h("span", { class: "ttl" }, r.title),
+      h("span", { class: "ttl" }, recipeTitle(r)),
       h("span", { class: "meta" }, meta),
       r.photo ? h("span", { class: "st" }, h("img", { class: "thumb", src: `/photos/${r.photo}`, alt: "", loading: "lazy" })) : null));
 }
@@ -114,7 +114,7 @@ export function mountRecipes(root) {
     }, t(`recipes.sort_by.${m}`)))),
     h("div", { class: "actions" }, h("button", { type: "button", class: "btn", onclick: () => close() }, t("common.done")))));
 
-  const matchesQuery = (r) => !query || nameKey(r.title).includes(query) || labelText(r).includes(query)
+  const matchesQuery = (r) => !query || nameKey(r.title).includes(query) || nameKey(recipeTitle(r)).includes(query) || labelText(r).includes(query)
     || r.ingredients.some((i) => nameKey(i.name).includes(query));
   const search = h("input", {
     type: "search", placeholder: t("recipes.search"), "aria-label": t("recipes.search"), enterkeyhint: "search",

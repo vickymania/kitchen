@@ -5,7 +5,7 @@
 import { h, toast, fill } from "./dom.js";
 import { t, formatAmount } from "./i18n.js";
 import * as store from "./store.js";
-import { scaled, servingsFor } from "./recipe.js";
+import { scaled, servingsFor, displayed } from "./recipe.js";
 import { findTimers, clock } from "./timers.js";
 import { keepScreenOn } from "./wake.js";
 import { markCooked } from "./recipe.js";
@@ -91,18 +91,20 @@ export function mountCook(root, id) {
   }
 
   function render() {
-    const steps = recipe.steps;
+    // The steps and lines as read (the translation when it is shown); markCooked gets the original.
+    const shown = displayed(recipe).recipe;
+    const steps = shown.steps;
     const step = steps[index] ?? "";
     const found = findTimers(step);
     fill(stage,
       h("div", { class: "cook-top" },
         h("a", { class: "btn ghost", href: `#/recipe/${recipe.id}`, "aria-label": t("cook.close") }, "✕"),
-        h("span", { class: "title mono" }, recipe.title),
+        h("span", { class: "title mono" }, shown.title),
         h("button", { type: "button", class: "btn ghost mono", onclick: () => { showIngredients = !showIngredients; render(); } },
           showIngredients ? t("cook.hide_ingredients") : t("cook.show_ingredients"))),
       timersView(),
       showIngredients
-        ? h("ul", { class: "ings cook-ings" }, scaled(recipe).map((i) => (i.heading
+        ? h("ul", { class: "ings cook-ings" }, scaled(shown).map((i) => (i.heading
           ? h("li", { class: "head mono" }, i.name)
           : h("li", {}, h("span", { class: "q" }, formatAmount(i)), h("span", { class: "n" }, i.name)))))
         : null,
@@ -144,7 +146,7 @@ export function mountCook(root, id) {
   }, 1000);
 
   const onKey = (e) => {
-    if (e.key === "ArrowRight" && index < recipe.steps.length - 1) { index++; render(); }
+    if (e.key === "ArrowRight" && index < displayed(recipe).recipe.steps.length - 1) { index++; render(); }
     if (e.key === "ArrowLeft" && index > 0) { index--; render(); }
   };
   document.addEventListener("keydown", onKey);

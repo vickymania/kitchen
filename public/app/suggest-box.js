@@ -3,7 +3,7 @@
 // the field drives them with the arrow keys (a combobox); Enter on a
 // highlighted row picks it. Also the relink of a line and "Onthoud als naam".
 import { h, toast, sheet, newId, fill } from "./dom.js";
-import { t } from "./i18n.js";
+import { t, itemName } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import { nameKey } from "../shared/ingredients.js";
 import { suggest, exactItem } from "../shared/suggest.js";
@@ -51,8 +51,8 @@ export function suggestBox(input, { textOf = (v) => v, onPick, except = null, ke
         h("button", { type: "button", class: "sg-row", tabindex: "-1",
           // pointerdown keeps the field's focus (the keyboard stays up on a phone).
           onpointerdown: (ev) => ev.preventDefault(), onclick: () => pick(r) },
-        h("span", { class: "sg-name" }, r.item.name),
-        r.via ? h("span", { class: "sg-also mono" }, t("names.also", { alias: r.via })) : null,
+        h("span", { class: "sg-name" }, itemName(r.item)),
+        r.via && r.via !== itemName(r.item) ? h("span", { class: "sg-also mono" }, t("names.also", { alias: r.via })) : null,
         product ? h("span", { class: "sg-prod mono" }, product) : null));
     }), keepOpen && text.trim() && !rows.length ? h("li", { class: "sg-none mono" }, t("names.no_match")) : null);
     input.setAttribute("aria-expanded", String(rows.length > 0));

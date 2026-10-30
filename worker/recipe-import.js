@@ -15,6 +15,7 @@
 // returns it.
 import { askClaude, takeOne } from "./claude.js";
 import { LABEL_SCHEMA, labelPatch } from "./labels.js";
+import { TRANSLATION_SCHEMA, LANGS, otherLang } from "../public/shared/bilingual.js";
 import { savePhoto, PHOTO_TYPES, PHOTO_MAX_BYTES } from "./photos.js";
 import { clampBox } from "../public/shared/recipe-import.js";
 
@@ -55,8 +56,11 @@ const RECIPE_PROPERTIES = {
   steps: { type: "array", items: { type: "string" }, description: "One line per step, without its number" },
   notes: { type: "string", description: "Everything else written with the recipe, in its own words: the introduction above it, tips, variations, and the equipment it lists (as \"Benodigdheden: frituurpan, spuitzak, …\"); empty only when there is nothing" },
   ...LABEL_SCHEMA.properties,
+  // Both languages from the same call (0029, 30-10-2026: never a second call for it).
+  lang: { type: "string", enum: LANGS, description: "The language the recipe is written in: \"en\" for English, \"nl\" for Dutch (and for any other language)" },
+  translation: { ...TRANSLATION_SCHEMA, description: "The whole recipe in the other language: English when lang is nl, Dutch when lang is en" },
 };
-const RECIPE_REQUIRED = ["is_recipe", "title", "servings", "ingredients", "steps", "notes", ...LABEL_SCHEMA.required];
+const RECIPE_REQUIRED = ["is_recipe", "title", "servings", "ingredients", "steps", "notes", ...LABEL_SCHEMA.required, "lang", "translation"];
 
 export const PAGE_SCHEMA = {
   type: "object",
@@ -86,6 +90,7 @@ const RULES = [
   "Write the recipe out in the language it is written in. Do not translate.",
   "Keep every ingredient exactly as written, whatever it is. Do not add, leave out or change ingredients or amounts.",
   "Pick each label from the allowed values only; count oven or simmering time in time_minutes.",
+  "Then, apart from that, give lang and translation: the same recipe (title, every ingredient line in the same order, every step, the notes) in the other language, natural kitchen English or Dutch, nothing added or left out.",
 ];
 
 const PHOTO_PROMPT = [
@@ -114,7 +119,8 @@ const servingsOf = (v) => {
  * `photos` is how many photos were sent (0 for a page): only then a dish.
  *   { title, servings, ingredients: [lines], steps: [lines], notes,
  *     labels: recipe.put label patch or null, dish: { photo, box } or null,
- *     thin: true when it needs a close look }
+ *     thin: true when it needs a close look,
+ *     lang: 'nl' | 'en' | null, translation: { title, ingredients, steps, notes } in the other language or null }
  */
 export function draftOf(answer, { photos = 0 } = {}) {
   if (!answer || typeof answer !== "object" || answer.is_recipe === false) return null;
@@ -137,6 +143,25 @@ export function draftOf(answer, { photos = 0 } = {}) {
     labels: labelPatch(answer),
     dish,
     thin: isThin(ingredients, steps),
+    ...translationOf(answer),
+  };
+}
+
+/** The answer's language and its translation into the other one, checked; nulls when absent. */
+export function translationOf(answer) {
+  const lang = LANGS.includes(answer?.lang) ? answer.lang : null;
+  const tr = answer?.translation;
+  const title = lang && tr && typeof tr === "object" ? line(tr.title, 200) : "";
+  if (!title) return { lang, translation: null };
+  return {
+    lang,
+    translation: {
+      lang: otherLang(lang),
+      title,
+      ingredients: lines(tr.ingredients, 300, 150),
+      steps: lines(tr.steps, 2000, 80),
+      notes: String(tr.notes ?? "").trim().slice(0, 2000),
+    },
   };
 }
 
@@ -394,7 +419,7 @@ export async function importFromPhotos(request, env, who) {
   const out = await askClaude(env, {
     what: "recipe photos",
     schema: PHOTO_SCHEMA,
-    maxTokens: 8000,
+    maxTokens: 14000,
     content: [
       ...photos.flatMap((p, i) => [
         { type: "text", text: `Photo ${i + 1}:` },
@@ -428,7 +453,7 @@ export async function importFromUrl(env, who, body) {
     const out = await askClaude(env, {
       what: "recipe page",
       schema: PAGE_SCHEMA,
-      maxTokens: 8000,
+      maxTokens: 14000,
       content: [{ type: "text", text: `${PAGE_PROMPT}\n\n<page url="${url.href}">\n${text}\n</page>` }],
     });
     if (out.failed) return failed(out);

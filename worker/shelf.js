@@ -17,6 +17,7 @@ import { isExcluded } from "../public/shared/excluded.js";
 import { KEEPS, SHELF_DAYS_MAX } from "../public/shared/shelf-life.js";
 import { applyOps } from "./ops-store.js";
 import { askClaude, takeSome, CHEAP_MODEL } from "./claude.js";
+import { NAME_EN_DAILY_LIMIT, nameAnswers } from "./kinds.js";
 
 export const SHELF_DAILY_LIMIT = 200;        // items looked up after purchases, per household per day
 export const SHELF_FILL_DAILY_LIMIT = 2000;  // items through the batch route, per household per day
@@ -44,6 +45,29 @@ export const SHELF_SCHEMA = {
     },
   },
 };
+
+/**
+ * The same request names new items in English too (0029, 30-10-2026:
+ * never a second call where one already happens): with items to name, each
+ * row also gets name_en; only those items' answers are written (item.translate).
+ */
+export function shelfSchema({ names = false } = {}) {
+  if (!names) return SHELF_SCHEMA;
+  const row = SHELF_SCHEMA.properties.items.items;
+  return {
+    ...SHELF_SCHEMA,
+    properties: {
+      items: {
+        type: "array",
+        items: {
+          ...row,
+          required: [...row.required, "name_en"],
+          properties: { ...row.properties, name_en: { type: "string", description: "The usual English name of the thing on this line, as an English shopping list says it, short and without brand" } },
+        },
+      },
+    },
+  };
+}
 
 const PROMPT = [
   "For each product of a Dutch household's groceries (names are Dutch, bought at Dutch supermarkets such as Albert Heijn and Dirk),",
@@ -76,7 +100,7 @@ export async function shelfCandidates(env, hh, itemIds) {
   const ids = [...new Set(itemIds.filter((x) => typeof x === "string"))];
   if (!ids.length) return { items: [], excluded: 0 };
   const items = await rowsByIds(env, hh,
-    "SELECT id, name FROM items WHERE household_id = ? AND id IN (?) AND deleted_at IS NULL AND shelf_source IS NULL", ids);
+    "SELECT id, name, name_en FROM items WHERE household_id = ? AND id IN (?) AND deleted_at IS NULL AND shelf_source IS NULL", ids);
   const products = items.length ? await rowsByIds(env, hh,
     "SELECT item_id, name, brand FROM products WHERE household_id = ? AND item_id IN (?) AND deleted_at IS NULL ORDER BY updated_at DESC",
     items.map((i) => i.id)) : [];
@@ -94,7 +118,7 @@ export async function shelfCandidates(env, hh, itemIds) {
       excluded++;
       continue;
     }
-    out.push({ id: item.id, name: item.name, products: [...new Set(names)].slice(0, PRODUCTS_PER_ITEM) });
+    out.push({ id: item.id, name: item.name, name_en: item.name_en ?? null, products: [...new Set(names)].slice(0, PRODUCTS_PER_ITEM) });
   }
   return { items: out, excluded };
 }
@@ -150,8 +174,9 @@ export function shelfAnswers(items, answer) {
  * skipped). `bucket` and `limit` are the daily counter. Resolves to
  * { asked, written, excluded, failed, limited, results: [{ id, name, shelf_days, opened_days, kind }] }.
  */
-export async function lookupShelf(env, who, itemIds, { bucket = "shelf", limit = SHELF_DAILY_LIMIT, productIds = [] } = {}) {
-  const out = { asked: 0, written: 0, excluded: 0, failed: 0, limited: false, results: [] };
+export async function lookupShelf(env, who, itemIds, { bucket = "shelf", limit = SHELF_DAILY_LIMIT, productIds = [], nameIds = [] } = {}) {
+  // `named`: the items of nameIds this request asked an English name for (worker/kinds.js asks the rest).
+  const out = { asked: 0, written: 0, excluded: 0, failed: 0, limited: false, results: [], named: new Set() };
   if (!env.ANTHROPIC_API_KEY) return { ...out, off: true };
   const found = await shelfCandidates(env, who.householdId, itemIds);
   const products = await productCandidates(env, who.householdId, productIds);
@@ -162,14 +187,20 @@ export async function lookupShelf(env, who, itemIds, { bucket = "shelf", limit =
   const allowed = await takeSome(env, bucket, who.householdId, todo.length, limit);
   if (allowed < todo.length) out.limited = true;
   todo = todo.slice(0, allowed);
+  // The items that also need an English name, as far as the day's naming limit goes.
+  const wanted = new Set(nameIds);
+  const naming = todo.filter((c) => c.kind !== "product" && wanted.has(c.id) && !c.name_en);
+  const nameable = await takeSome(env, "name_en", who.householdId, naming.length, NAME_EN_DAILY_LIMIT);
+  for (const c of naming.slice(0, nameable)) { c.needsName = true; out.named.add(c.id); }
   for (let i = 0; i < todo.length; i += SHELF_BATCH) {
     const chunk = todo.slice(i, i + SHELF_BATCH);
     out.asked += chunk.length;
+    const names = chunk.some((c) => c.needsName);
     const res = await askClaude(env, {
       what: "shelf life",
       model: CHEAP_MODEL,
-      schema: SHELF_SCHEMA,
-      maxTokens: 300 + chunk.length * 80,
+      schema: shelfSchema({ names }),
+      maxTokens: 300 + chunk.length * (names ? 100 : 80),
       content: [{ type: "text", text: shelfPrompt(chunk) }],
     });
     if (res.failed) {
@@ -186,6 +217,13 @@ export async function lookupShelf(env, who, itemIds, { bucket = "shelf", limit =
       const a = [...answers.values()][k];
       return { ...o, shelf_days: a.shelf_days, opened_days: a.opened_days, source: "claude" };
     });
+    // English names of the items that needed one (a wrong row is left out, as in worker/kinds.js).
+    const nameRows = chunk.filter((c) => c.needsName);
+    const english = names ? nameAnswers(chunk, { items: (res.answer?.items ?? []).filter((a) => nameRows.includes(chunk[Number(a?.n) - 1])) }) : new Map();
+    const translate = [...english].map(([itemId, name]) => ({
+      type: "item.translate", op_id: `name-${crypto.randomUUID()}`, item_id: itemId, name_en: name, source: "claude",
+    }));
+    if (translate.length) await applyOps(env.DB, who, translate);
     const results = ops.length ? await applyOps(env.DB, who, ops) : [];
     results.forEach((r, k) => {
       const itemId = ops[k].item_id ?? ops[k].product_id;

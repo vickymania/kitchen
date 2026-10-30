@@ -11,6 +11,7 @@ import { labelRecipe } from "./labels.js";
 import { importFromPhotos, importFromUrl } from "./recipe-import.js";
 import { lookupShelf, shelfFill } from "./shelf.js";
 import { lookupKinds } from "./kinds.js";
+import { translateRecipes } from "./translate.js";
 import { syncOffers } from "./offers.js";
 import { parseListInput } from "../public/shared/ingredients.js";
 import { isExcluded, isExcludedLookalike } from "../public/shared/excluded.js";
@@ -232,7 +233,7 @@ async function guestOwnsAll(env, who, list) {
  * or brand + name).
  */
 async function reviewerTouchesExcluded(env, who, list) {
-  if (list.some((o) => o.type === "item.alias" && isExcluded(String(o.name ?? "")))) return true;
+  if (list.some((o) => (o.type === "item.alias" && isExcluded(String(o.name ?? ""))) || (o.type === "item.translate" && isExcluded(String(o.name_en ?? ""))))) return true;
   const ids = [...new Set(list.filter((o) => o.type === "product.move").map((o) => String(o.product_id ?? "")))];
   if (!ids.length) return false;
   const { results } = await env.DB.prepare(
@@ -300,19 +301,36 @@ async function ops({ env, who, body, ctx }) {
   const unknownShelf = new Set();
   const unknownShelfProducts = new Set();
   const unknownKind = new Set();
-  const results = await applyOps(env.DB, who, list, { unknownShelf, unknownShelfProducts, unknownKind });
-  // A product whose kind neither AH's category nor the name rules know:
-  // Claude Haiku says it after this answer went out (worker/kinds.js).
-  if (unknownKind.size && env.ANTHROPIC_API_KEY && ctx?.waitUntil) {
-    ctx.waitUntil(lookupKinds(env, who, [...unknownKind]).catch(() => console.log("kind lookup failed")));
+  const untranslatedItems = new Set();
+  const untranslatedRecipes = new Set();
+  const results = await applyOps(env.DB, who, list, { unknownShelf, unknownShelfProducts, unknownKind, untranslatedItems, untranslatedRecipes });
+  // After this answer went out, Claude Haiku in as few requests as it takes:
+  // the shelf life of what was bought or put in the pantry without one
+  // (worker/shelf.js), the kind of a product neither AH's category nor the
+  // name rules know (worker/kinds.js), and a new item's English name in
+  // whichever of those two requests already goes (0029: the shelf request
+  // names the items it asks about; the kinds request the rest, alone only
+  // when neither other request is due). Nobody waits for it.
+  const shelfDue = unknownShelf.size || unknownShelfProducts.size;
+  if ((shelfDue || unknownKind.size || untranslatedItems.size) && env.ANTHROPIC_API_KEY && ctx?.waitUntil) {
+    ctx.waitUntil((async () => {
+      let named = new Set();
+      if (shelfDue) {
+        const shelf = await lookupShelf(env, who, [...unknownShelf], { productIds: [...unknownShelfProducts], nameIds: [...untranslatedItems] })
+          .catch(() => { console.log("shelf lookup failed"); return null; });
+        named = shelf?.named ?? named;
+      }
+      const left = [...untranslatedItems].filter((x) => !named.has(x));
+      if (unknownKind.size || left.length) {
+        await lookupKinds(env, who, [...unknownKind], { itemIds: left }).catch(() => console.log("kind lookup failed"));
+      }
+    })());
   }
-  // Bought or put in the pantry without a shelf life: Claude looks it up
-  // after this answer went out (worker/shelf.js); nobody waits for it.
-  // Products bought on a receipt without their own shelf life go in the same request.
-  if ((unknownShelf.size || unknownShelfProducts.size) && env.ANTHROPIC_API_KEY && ctx?.waitUntil) {
-    ctx.waitUntil(lookupShelf(env, who, [...unknownShelf], { productIds: [...unknownShelfProducts] })
-      .catch(() => console.log("shelf lookup failed")));
+  // An edit made a recipe's translation stale: Haiku translates it again (worker/translate.js).
+  if (untranslatedRecipes.size && env.ANTHROPIC_API_KEY && ctx?.waitUntil) {
+    ctx.waitUntil(translateRecipes(env, who, [...untranslatedRecipes]).catch(() => console.log("recipe translation failed")));
   }
+
   const head = await env.DB.prepare("SELECT rev FROM households WHERE id = ?").bind(who.householdId).first();
   return json({ results, rev: head?.rev ?? 0 });
 }
@@ -387,12 +405,12 @@ async function offersSync({ env, who, body }) {
 // (worker/widget.js). ?since=<rev>: nothing changed costs one row read.
 async function widget({ env, url, who }) {
   const since = Number(url.searchParams.get("since") ?? 0);
-  return json(await widgetList(env.DB, who.householdId, Number.isFinite(since) && since > 0 ? Math.floor(since) : 0, undefined, who.memberId));
+  return json(await widgetList(env.DB, who.householdId, Number.isFinite(since) && since > 0 ? Math.floor(since) : 0, undefined, who.memberId, who.locale));
 }
 
 // The widget's suggestion names (worker/widget.js widgetNames): once a day.
 async function widgetNamesRoute({ env, who }) {
-  return json(await widgetNames(env.DB, who.householdId, undefined, who.memberId));
+  return json(await widgetNames(env.DB, who.householdId, undefined, who.memberId, who.locale));
 }
 
 async function photos({ request, env, who }) {

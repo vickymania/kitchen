@@ -70,6 +70,7 @@ const FILES = [
   ["public/shared/again-scope.js", "public/shared/again-scope.js"],
   ["public/shared/product-kinds.js", "public/shared/product-kinds.js"],
   ["public/shared/recipe-text.js", "public/shared/recipe-text.js"],
+  ["public/shared/bilingual.js", "public/shared/bilingual.js"],
   ["public/shared/store-prices.js", "public/shared/store-prices.js"],
   ["public/shared/deal-math.js", "public/shared/deal-math.js"],
   ["public/shared/preferences.js", "public/shared/preferences.js"],

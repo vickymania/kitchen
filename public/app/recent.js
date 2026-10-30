@@ -4,7 +4,7 @@
 // top, and "Beste koop" per item: the most stars per euro. The grouping and
 // the pick are public/shared/recent-purchases.js; never an excluded thing.
 import { h, title, toast, newId, fill } from "./dom.js";
-import { t, getLocale, formatNumber } from "./i18n.js";
+import { t, getLocale, formatNumber, itemName } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import * as store from "./store.js";
 import { syncLine } from "./status.js";
@@ -89,7 +89,7 @@ export function mountRecent(root) {
     fill(bestBox, bestList.length ? h("details", { class: "best-buys" },
       h("summary", {}, h("h2", {}, t("recent.best")), h("span", { class: "note mono mute" }, String(bestList.length))),
       h("ul", { class: "rows" }, bestList.map((b) => h("li", { class: "row static rating" },
-        h("span", { class: "ttl" }, b.item.name),
+        h("span", { class: "ttl" }, itemName(b.item)),
         h("span", { class: "meta" }, `${productLabel(b.product)} · ★${formatNumber(b.stars)} · ${perText(b)}`))))) : null);
     fill(body,
       trips.length ? null : h("p", { class: "empty" }, t("recent.empty")),
