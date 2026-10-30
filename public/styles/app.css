@@ -18,15 +18,16 @@
    white. data-theme="light", or "system" on a light phone, swaps the tokens. */
 :root{
   color-scheme:dark;
-  --paper:#0B0D10;
-  --panel:#171A1F;
-  --ink:#E9ECEF;
-  --ink-hover:#C9CED4;
-  --on-ink:#0B0D10;
-  --mute:#8A93A0;
-  --body:#C5CBD3;
-  --rule:#2A2F36;
-  --signal:#E0263F;
+  /* the carbon palette of music.vexed.works and livelog.vexed.works (30-10-2026) */
+  --paper:#0B0B0C;
+  --panel:#141416;
+  --ink:#F2F0EB;
+  --ink-hover:#D8D5CE;
+  --on-ink:#0B0B0C;
+  --mute:#8C8984;
+  --body:#CFCBC4;
+  --rule:#26262A;
+  --signal:#E5202E;
   --shade:0,0,0;
   --gut:clamp(16px,4.5vw,64px);
   --top:54px;

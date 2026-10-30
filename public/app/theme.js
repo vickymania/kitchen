@@ -26,7 +26,7 @@ export function applyTheme(theme = getTheme()) {
   document.documentElement.dataset.theme = theme;
   // The phone's status bar follows the page background.
   const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", paper || "#0B0D10");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", paper || "#0B0B0C");
 }
 
 applyTheme();
