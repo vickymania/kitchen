@@ -4,7 +4,7 @@
 // has "verbergen" (with undo) and the hidden ones sit under "verborgen (N)". Kept apart from the list itself on purpose (Thomas, phase 2): the list
 // is what someone asked for, this is only a suggestion. Never an excluded thing
 // (public/shared/intervals.js filters it).
-import { h, title, toast, newId, fill } from "./dom.js";
+import { h, title, toast, newId, fill, svg, EYE_SVG, EYE_OFF_SVG } from "./dom.js";
 import { t, shownName } from "./i18n.js";
 import { OpError } from "../shared/ops.js";
 import { dueItems, localToday } from "../shared/intervals.js";
@@ -33,6 +33,7 @@ function row(d) {
       toast(err instanceof OpError ? t(`errors.${err.code}`) : t("errors.refused"), { error: true });
     }
   };
+  const status = d.on_list ? t("again.on_list") : d.in_pantry ? t("again.in_pantry") : d.due ? t("again.due") : "";
   const meta = [t("again.last", { n: d.since }), t("again.usually", { n: d.interval })].join(", ");
   return h("li", {
     class: `entry again${d.due ? " due" : ""}`, role: "button", tabindex: d.on_list ? "-1" : "0",
@@ -41,18 +42,18 @@ function row(d) {
     onkeydown: (ev) => { if (!d.on_list && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); add(); } },
   },
   h("span", { class: "box plus", "aria-hidden": "true" }, d.on_list ? "✓" : "+"),
-  h("span", { class: "ttl" }, shownName(store.getView(), d.name)),
-  h("span", { class: "amt mono" }, d.on_list ? t("again.on_list") : d.in_pantry ? t("again.in_pantry") : d.due ? t("again.due") : ""),
-  h("span", { class: "meta" }, meta),
+  h("span", { class: "ttl", lang: "nl" }, shownName(store.getView(), d.name)),
+  h("span", { class: "meta" }, status ? h("b", { class: "mono status" }, status) : null, status ? " · " : "", meta),
   h("button", {
-    type: "button", class: "again-hide mono",
+    type: "button", class: "again-hide",
+    "aria-label": d.hidden ? t("again.show") : t("again.hide"), title: d.hidden ? t("again.show") : t("again.hide"),
     onclick: (ev) => {
       ev.stopPropagation();
       if (d.hidden) setAgain(d, "show", d.again, t("again.shown", { title: d.name }));
       else setAgain(d, "hide", d.again, t("again.hidden_toast", { title: d.name }));
     },
     onkeydown: (ev) => ev.stopPropagation(),
-  }, d.hidden ? t("again.show") : t("again.hide")));
+  }, svg(d.hidden ? EYE_SVG : EYE_OFF_SVG)));
 }
 
 export function mountAgain(root) {

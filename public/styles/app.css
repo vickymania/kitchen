@@ -325,13 +325,18 @@ footer.foot{margin:72px 0 40px;color:var(--mute)}
 .entry.again{cursor:pointer}
 .entry.again .box{font:500 18px/1 "Share Tech Mono",monospace;color:var(--ink)}
 .entry.again.due .box{border-color:var(--signal);color:var(--signal)}
-.entry.again.due .amt{color:var(--signal)}
 .entry.again[aria-disabled=true]{cursor:default}
 .entry.again[aria-disabled=true] .ttl{color:var(--mute)}
-.entry.again .meta{grid-column:2/5}
-.again-hide,.again-toggle{border:0;background:transparent;color:var(--mute);font-size:12px;letter-spacing:.04em;cursor:pointer;min-height:44px;padding:0 4px;text-align:left}
-.again-hide{grid-column:2/5;justify-self:start;min-height:32px}
-.again-hide:hover,.again-toggle:hover{color:var(--ink);text-decoration:underline}
+.entry.again .ttl{grid-column:2/4;overflow-wrap:normal;word-break:normal;hyphens:auto}
+.entry.again .meta{grid-column:2/4}
+.entry.again .meta .status{font-weight:400;letter-spacing:.08em;text-transform:uppercase}
+.entry.again.due .meta .status{color:var(--signal)}
+.again-toggle{border:0;background:transparent;color:var(--mute);font-size:12px;letter-spacing:.04em;cursor:pointer;min-height:44px;padding:0 4px;text-align:left}
+.again-hide{grid-column:4;grid-row:1/span 2;align-self:center;display:flex;align-items:center;justify-content:center;width:40px;height:44px;border:0;background:transparent;color:var(--mute);cursor:pointer;padding:0}
+.again-hide svg{width:20px;height:20px}
+.again-hide:hover{color:var(--signal);background:var(--panel)}
+.again-hide:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.again-toggle:hover{color:var(--ink);text-decoration:underline}
 .again-toggle{display:block;margin:18px 0 6px}
 /* The pantry ("Voorraad"): the amount in the box, what is due marked in signal, three taps per row. */
 .entry.stock{cursor:default;align-items:start;grid-template-columns:58px minmax(0,1fr) auto 40px}
