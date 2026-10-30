@@ -333,6 +333,7 @@ test("migration: every old preferred product becomes a preference at its store, 
   applyMigration(env, "0025");     // reviews is synced too
   applyMigration(env, "0026");
   applyMigration(env, "0027");     // auto_changes is synced too
+  applyMigration(env, "0028");     // items.private_to is read on every pull
   const delta = await pull(env, thomas, head.rev);
   assert.ok(delta.rev > head.rev, "the household's rev moved, so phones ask");
   assert.deepEqual(delta.preferences.map((p) => [p.item_id, p.store, p.recipe_id, p.product_id]).sort(), [

@@ -208,7 +208,7 @@ async function logout({ request, env, who }) {
 async function sync({ env, url, who }) {
   const since = Number(url.searchParams.get("since") ?? 0);
   return json(await pull(env.DB, who.householdId, Number.isFinite(since) && since > 0 ? Math.floor(since) : 0,
-    { guest: who.recipesOnly }));
+    { guest: who.recipesOnly, memberId: who.memberId }));
 }
 
 /**
@@ -259,7 +259,7 @@ async function reviewerMergeRefused(env, who, list) {
     if (op.type !== "item.merge") continue;
     const facts = {};
     for (const id of [op.from_item_id, op.into_item_id]) {
-      const item = await env.DB.prepare("SELECT id, name, use_per_day, rate_source, deleted_at FROM items WHERE household_id = ? AND id = ?")
+      const item = await env.DB.prepare("SELECT id, name, use_per_day, rate_source, private_to, deleted_at FROM items WHERE household_id = ? AND id = ?")
         .bind(who.householdId, id).first();
       if (!item) return "not_found";
       const count = async (table) => (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE household_id = ? AND item_id = ? AND deleted_at IS NULL`)
@@ -387,12 +387,12 @@ async function offersSync({ env, who, body }) {
 // (worker/widget.js). ?since=<rev>: nothing changed costs one row read.
 async function widget({ env, url, who }) {
   const since = Number(url.searchParams.get("since") ?? 0);
-  return json(await widgetList(env.DB, who.householdId, Number.isFinite(since) && since > 0 ? Math.floor(since) : 0));
+  return json(await widgetList(env.DB, who.householdId, Number.isFinite(since) && since > 0 ? Math.floor(since) : 0, undefined, who.memberId));
 }
 
 // The widget's suggestion names (worker/widget.js widgetNames): once a day.
 async function widgetNamesRoute({ env, who }) {
-  return json(await widgetNames(env.DB, who.householdId));
+  return json(await widgetNames(env.DB, who.householdId, undefined, who.memberId));
 }
 
 async function photos({ request, env, who }) {

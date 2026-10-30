@@ -190,7 +190,8 @@ export function planGroups(data, { targets = [], excludes = [] } = {}) {
   const left = new Set(excludes.map((n) => nameKey(n)));
   const ids = Object.keys(facts).filter((id) => {
     const name = facts[id].item.name;
-    return !isExcluded(name) && !isExcludedLookalike(name) && !GENERIC.has(nameKey(name)) && !left.has(nameKey(name));
+    // A private item is nobody's duplicate: it is left out of every group.
+    return !facts[id].item.private_to && !isExcluded(name) && !isExcludedLookalike(name) && !GENERIC.has(nameKey(name)) && !left.has(nameKey(name));
   }).sort();
   const clean = Object.fromEntries(ids.map((id) => [id, cleanName(facts[id].item.name)]));
   const usable = ids.filter((id) => clean[id].compact && !GENERIC.has(clean[id].key) && !clean[id].several);
@@ -408,6 +409,8 @@ export function clearPair(a, b) {
 export function mergeProblem(from, into) {
   const a = from.item.name, b = into.item.name;
   if ([a, b].some((n) => isExcluded(n) || isExcludedLookalike(n))) return "excluded";
+  // A private item (items.private_to) never merges with a public one or another member's.
+  if ((from.item.private_to ?? null) !== (into.item.private_to ?? null)) return "private";
   if (!clearPair(a, b)) return "not_clear";
   if (from.bought >= HEAVY && into.bought >= HEAVY) return "both_heavy";
   const why = conflict(from, into);

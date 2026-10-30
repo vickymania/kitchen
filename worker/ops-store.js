@@ -7,6 +7,7 @@ import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pen
 import { addDays } from "../public/shared/shelf-life.js";
 import { OFFER_HISTORY } from "../public/shared/rate-learning.js";
 import { canonicalStore } from "../public/shared/stores.js";
+import { hiddenStatement, hiddenOf, loadHidden, rowHidden, rowFor, guardOp, touchesHidden } from "./privacy.js";
 
 const TABLE = {
   recipes: "recipes", entries: "list_entries", items: "items", members: "members",
@@ -30,7 +31,7 @@ const COLUMNS = {
   entries: ["id", "item_id", "title", "typed", "new_item", "amounts", "note", "sources", "added_by", "checked_at", "checked_by",
     "created_at", "updated_at", "deleted_at"],
   items: ["id", "name", "name_key", "preferred_product_id", "again", "low_at", "low_off", "not_yet_until",
-    "shelf_days", "opened_days", "shelf_source", "use_per_day", "rate_source", "rate_samples", "merged_into", "created_at", "deleted_at"],
+    "shelf_days", "opened_days", "shelf_source", "use_per_day", "rate_source", "rate_samples", "merged_into", "private_to", "created_at", "deleted_at"],
   products: ["id", "item_id", "name", "brand", "size", "store", "store_only", "category", "kind", "last_price_cents", "product_key",
     "shelf_days", "opened_days", "shelf_source", "created_at", "updated_at", "deleted_at"],
   ratings: ["id", "member_id", "product_id", "stars", "note", "created_at", "updated_at", "deleted_at"],
@@ -64,6 +65,9 @@ const SYNCED = ["recipes", "items", "entries", "members", "products", "ratings",
 // purchases, receipts, offers, preferences, prices, cook records, nightly reports or their changelog.
 export const GUEST_SYNCED = ["recipes", "members", "recipe_ratings"];
 const GUEST_MEMBER_FIELDS = ["id", "name", "removed_at"];
+
+// The deleted_at of a hidden row's bare tombstone: no real time, nothing to read from it.
+const HIDDEN_AT = "1970-01-01T00:00:00.000Z";
 
 const OP_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -219,6 +223,29 @@ async function load(db, hh, op, memberId) {
       // Its live rows are settled at the old rate first: a handful.
       for (const itemId of Object.keys(s.items)) await loadInto(db, hh, s, "pantry", "item_id = ? AND deleted_at IS NULL", itemId);
       break;
+    case "item.private": {
+      // The item and every live row about it: they are written again so the
+      // other members' phones hear it is gone (or back). A handful, once.
+      const itemId = String(op.item_id);
+      await loadInto(db, hh, s, "items", "id = ?", itemId);
+      const item = s.items[itemId];
+      if (!item) break;
+      for (const kind of ["entries", "purchases", "products", "pantry", "pantry_events", "preferences", "deal_rules", "pending_takes", "aliases", "auto_changes"]) {
+        await loadInto(db, hh, s, kind, "item_id = ? AND deleted_at IS NULL", itemId);
+      }
+      const pids = Object.keys(s.products);
+      for (let i = 0; i < pids.length; i += 90) {
+        const chunk = pids.slice(i, i + 90);
+        const inList = `product_id IN (${chunk.map(() => "?").join(",")}) AND deleted_at IS NULL`;
+        for (const kind of ["ratings", "store_prices", "auto_changes"]) await loadInto(db, hh, s, kind, inList, ...chunk);
+      }
+      await loadIds(db, hh, s, "receipts", Object.values(s.purchases).map((p) => p.receipt_id));
+      // Reports that name it, recipes linked to it (text and JSON, by a LIKE).
+      const like = `%${item.name.replace(/[%_]/g, "")}%`;
+      await loadInto(db, hh, s, "reviews", "deleted_at IS NULL AND (fixed LIKE ? OR decide LIKE ? OR errors LIKE ?)", like, like, like);
+      await loadInto(db, hh, s, "recipes", "deleted_at IS NULL AND ingredient_links LIKE ?", `%"${itemId}"%`);
+      break;
+    }
     case "item.again":
     case "item.rename":
     case "item.low":
@@ -577,6 +604,9 @@ function unknownShelfProducts(state, changed) {
 export async function applyOps(db, ctx, ops, hooks = {}) {
   const hh = ctx.householdId;
   const results = [];
+  // What this member may not see (items private to someone else): read once
+  // per batch, and only when there are ops. Nothing private: one empty read.
+  const hidden = ops.length ? await loadHidden(db, hh, ctx.memberId) : null;
   for (const op of ops) {
     const opId = op?.op_id;
     if (typeof opId !== "string" || !OP_ID_RE.test(opId)) {
@@ -590,6 +620,13 @@ export async function applyOps(db, ctx, ops, hooks = {}) {
     }
     for (let attempt = 0; ; attempt++) {
       const state = await load(db, hh, op, ctx.memberId);
+      // Another member's private item does not exist for this op: naming it
+      // is not_found, and its rows are out of the state the engine sees.
+      const dropped = guardOp(state, op, hidden, findItem);
+      if (dropped === "not_found") {
+        results.push({ op_id: opId, ok: false, error: "not_found" });
+        break;
+      }
       let outcome;
       try {
         // The reviewer device's (the nightly check's) changes go into its changelog (auto_changes).
@@ -597,6 +634,10 @@ export async function applyOps(db, ctx, ops, hooks = {}) {
       } catch (e) {
         if (!(e instanceof OpError)) throw e;
         results.push({ op_id: opId, ok: false, error: e.code });
+        break;
+      }
+      if (touchesHidden(state, outcome.changed, dropped, hidden)) {
+        results.push({ op_id: opId, ok: false, error: "not_found" });
         break;
       }
       const stmts = outcome.changed.length ? writeStatements(db, hh, state, outcome.changed) : [];
@@ -627,7 +668,7 @@ export async function applyOps(db, ctx, ops, hooks = {}) {
  * Everything that changed after `since`. since = 0 is a full load without
  * tombstones. `guest`: only GUEST_SYNCED, members as their names.
  */
-export async function pull(db, hh, since, { guest = false } = {}) {
+export async function pull(db, hh, since, { guest = false, memberId = null } = {}) {
   const kinds = guest ? GUEST_SYNCED : SYNCED;
   const head = await db.prepare("SELECT rev FROM households WHERE id = ?").bind(hh).first();
   const rev = head?.rev ?? 0;
@@ -638,10 +679,25 @@ export async function pull(db, hh, since, { guest = false } = {}) {
   const live = full ? " AND deleted_at IS NULL" : "";
   const q = (table, extra = live) =>
     db.prepare(`SELECT * FROM ${table} WHERE household_id = ? AND rev > ?${extra}`).bind(hh, full ? -1 : since);
-  const results = await db.batch(kinds.map((kind) =>
-    kind === "members" ? q("members", full ? " AND removed_at IS NULL" : "") : q(TABLE[kind])));
+  // Items private to another member (worker/privacy.js), read in the same batch.
+  const results = await db.batch([...kinds.map((kind) =>
+    kind === "members" ? q("members", full ? " AND removed_at IS NULL" : "") : q(TABLE[kind])),
+  ...(guest ? [] : [hiddenStatement(db, hh, memberId)])]);
+  const hidden = guest ? null : hiddenOf(results[kinds.length].results);
   const out = { rev, full };
   kinds.forEach((kind, i) => { out[kind] = results[i].results.map((r) => fromRow(kind, r)); });
+  if (hidden && !hidden.empty) {
+    // A hidden row is left out of a full load; in a delta it goes as a bare
+    // tombstone (its id only), so a phone that had it (before it was made
+    // private) drops it. Nothing of its content leaves the server.
+    for (const kind of kinds) {
+      if (kind === "members") continue;
+      out[kind] = out[kind].flatMap((row) => {
+        if (!rowHidden(kind, row, hidden)) return [rowFor(kind, row, hidden)];
+        return full ? [] : [{ id: row.id, deleted_at: row.deleted_at ?? HIDDEN_AT, rev: row.rev }];
+      });
+    }
+  }
   if (guest) out.members = out.members.map((m) => Object.fromEntries(GUEST_MEMBER_FIELDS.map((f) => [f, m[f] ?? null])));
   // Which item each recipe line means is the household's (30-10-2026): never a guest's.
   if (guest) out.recipes = out.recipes.map(({ ingredient_links, ...r }) => r);

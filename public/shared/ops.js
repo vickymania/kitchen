@@ -43,7 +43,7 @@ export const OP_TYPES = [
   "preference.set", "preference.clear",
   "pantry.add", "pantry.update", "pantry.use", "pantry.unuse", "pantry.remove", "pantry.pend", "pantry.unpend",
   "deal_rule.set", "deal_rule.clear",
-  "item.merge", "product.move", "item.alias",
+  "item.merge", "product.move", "item.alias", "item.private",
   "prices.sync",
   "review.save", "recipe.links",
 ];
@@ -190,6 +190,9 @@ function typedName(typed, item) {
   const t = String(typed ?? "").trim();
   return t && nameKey(t) !== item.name_key ? t.slice(0, 120) : null;
 }
+
+/** Both items private to the same member, or both the household's. */
+export const samePrivacy = (a, b) => (a?.private_to ?? null) === (b?.private_to ?? null);
 
 /** Rows that still point at an item: a live one keeps it alive. */
 const ITEM_ROWS = ["entries", "purchases", "products", "pantry", "pantry_events", "preferences", "deal_rules", "pending_takes", "aliases"];
@@ -1162,6 +1165,41 @@ const HANDLERS = {
     return {};
   },
 
+  // "Alleen voor mij" (30-10-2026: Condooms, a reminder only he
+  // sees). { item_id, private: true } makes the item the sender's own
+  // (private_to = his member id), false gives it back to the household. Only
+  // that member may clear it; for anyone else it does not exist (not_found;
+  // worker/ops-store.js hides it before the engine runs). Every row about
+  // the item is written again (its rev moves), so the other members' phones
+  // get it as gone, or back, on their next pull.
+  "item.private"(state, op, ctx) {
+    const item = state.items[id(op.item_id, "item_id")];
+    if (!item || item.deleted_at) throw new OpError("not_found", "item");
+    if (typeof op.private !== "boolean") throw new OpError("bad_field", "private");
+    if (!ctx.memberId) throw new OpError("forbidden");
+    const owner = item.private_to ?? null;
+    if (owner && owner !== ctx.memberId) throw new OpError("not_found", "item");
+    const want = op.private ? ctx.memberId : null;
+    if (owner === want) return { already: true };
+    item.private_to = want;
+    ctx.touch("items", item.id);
+    const products = new Set();
+    for (const p of Object.values(state.products)) if (p.item_id === item.id) products.add(p.id);
+    const receipts = new Set();
+    for (const kind of [...ITEM_ROWS, "ratings", "store_prices", "auto_changes"]) {
+      for (const row of Object.values(state[kind] ?? {})) {
+        if (row.item_id !== item.id && !products.has(row.product_id)) continue;
+        ctx.touch(kind, row.id);
+        if (kind === "purchases" && row.receipt_id) receipts.add(row.receipt_id);
+      }
+    }
+    for (const rid of receipts) if (state.receipts[rid]) ctx.touch("receipts", rid);
+    // Text that names it (a nightly report, a recipe linked to it): loaded by the server.
+    for (const r of Object.values(state.reviews ?? {})) ctx.touch("reviews", r.id);
+    for (const r of Object.values(state.recipes ?? {})) ctx.touch("recipes", r.id);
+    return { private: op.private };
+  },
+
   "item.again"(state, op, ctx) {
     const item = state.items[id(op.item_id, "item_id")];
     if (!item || item.deleted_at) throw new OpError("not_found", "item");
@@ -1986,6 +2024,8 @@ const HANDLERS = {
       : aliasTarget(state.items, state.items[id(op.into_item_id, "into_item_id")]);
     if (!into) throw new OpError("not_found", "item");
     if (into.id === from.id) throw new OpError("same_item");
+    // A merge never makes a private item public or the other way round.
+    if (!samePrivacy(from, into)) throw new OpError("private_mismatch");
     settleItem(state, ctx, from.id, day);
     settleItem(state, ctx, into.id, day);
     const moved = emptyMoved();
@@ -2051,6 +2091,10 @@ const HANDLERS = {
     const mine = (row) => row.product_id === p.id && !row.deleted_at && row.item_id !== target.id;
     const fromItems = new Set([p.item_id, ...Object.values(state.purchases).filter(mine).map((r) => r.item_id),
       ...Object.values(state.pantry).filter(mine).map((r) => r.item_id)].filter((x) => x && x !== target.id));
+    // What was bought of it never goes from a private item to a public one or back.
+    for (const itemId of fromItems) {
+      if (state.items[itemId] && !samePrivacy(state.items[itemId], target)) throw new OpError("private_mismatch");
+    }
     if (fromItems.size) {
       for (const itemId of [...fromItems].sort()) settleItem(state, ctx, itemId, day);
       settleItem(state, ctx, target.id, day);

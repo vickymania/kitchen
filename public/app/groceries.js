@@ -8,7 +8,7 @@ import { parseListInput, parseAmount } from "../shared/ingredients.js";
 import { OpError } from "../shared/ops.js";
 import * as store from "./store.js";
 import { syncLine } from "./status.js";
-import { productLabel, preferredSheet, money, whyText } from "./product.js";
+import { productLabel, preferredSheet, money, whyText, privateBlock, privateMark } from "./product.js";
 import { currentOffers, isCoupon } from "../shared/offers.js";
 import { resolveProduct, lastPrice, purchasesByProduct } from "../shared/preferences.js";
 import { listLayout, basketOpen } from "../shared/list-groups.js";
@@ -80,6 +80,7 @@ async function editEntry(e) {
     e.item_id ? h("button", { type: "button", class: "btn ghost mono", onclick: () => close("prefer") }, t("product.preferred")) : null,
     e.item_id ? h("button", { type: "button", class: "btn ghost mono", onclick: () => close("rule") }, t("rule.title")) : null,
     rules.map((r) => h("p", { class: "hint now" }, ruleLine(view, r))),
+    privateBlock(e.item_id ? view.items[e.item_id] : null),
     h("div", { class: "actions" },
       h("button", { type: "submit", class: "btn primary grow" }, t("common.save")),
       h("button", { type: "button", class: "btn signal", onclick: () => close("delete") }, t("list.delete")))));
@@ -265,7 +266,7 @@ function entryRow({ entry: e, resolved }, ctx) {
       "aria-label": t(checked ? "list.untick" : "list.tick", { title: e.title }), onclick: tick,
     }, h("span", { class: "box" }, svg(CHECK_SVG))),
     h("button", { type: "button", class: "line-main", "aria-expanded": String(isOpen), onclick: toggleOpen },
-      h("span", { class: "ttl" }, e.title, fresh ? h("span", { class: "new-tag mono" }, t("names.new")) : null),
+      h("span", { class: "ttl" }, e.title, privateMark(view, e.item_id), fresh ? h("span", { class: "new-tag mono" }, t("names.new")) : null),
       h("span", { class: "amt" }, formatAmounts(e.amounts)),
       typed ? h("span", { class: "typed mono" }, t("names.typed", { text: typed })) : null,
       shortLine(e, resolved),

@@ -43,6 +43,9 @@ export function title(text, { long = false } = {}) {
 
 export const CHECK_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>';
 
+// The small lock on a private list line ("Alleen voor mij").
+export const LOCK_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>';
+
 export function svg(markup) {
   const t = document.createElement("template");
   t.innerHTML = markup.trim();

@@ -659,6 +659,12 @@
     "done": "{title} is off the list.",
     "undo": "Undo"
   },
+  "private": {
+    "toggle": "Only for me",
+    "on": "Only you see this, nobody else in the household.",
+    "off": "Everyone in the household sees this.",
+    "mark": "Only for you"
+  },
   "names": {
     "new": "New",
     "did_you_mean": "Did you mean {name}?",
@@ -680,6 +686,7 @@
     "suggestions": "Suggestions"
   },
   "errors": {
+    "private_mismatch": "A private item does not merge with a shared one.",
     "name_taken": "That name already belongs to something else.",
     "import_off": "Reading recipes is not switched on yet.",
     "too_many_imports": "Enough recipes read for today.",

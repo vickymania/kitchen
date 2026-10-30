@@ -4,7 +4,7 @@
 // the product to buy for its item: at any store or one, for any recipe or
 // one (public/shared/preferences.js), which the list line then shows.
 import { STARS_MAX, nextTap, starFill, starsLabel } from "../shared/recipe-ratings.js";
-import { h, title, toast, sheet, newId, fill } from "./dom.js";
+import { h, title, toast, sheet, newId, fill, svg, LOCK_SVG } from "./dom.js";
 import { t, getLocale, formatDate } from "./i18n.js";
 import { OpError, productKey } from "../shared/ops.js";
 import { nameKey } from "../shared/ingredients.js";
@@ -272,6 +272,36 @@ function storeOnlyBlock(p, view) {
       h("span", {}, shopName ? t("product.store_only", { store: shopName }) : t("product.store_only_any"))));
 }
 
+/**
+ * "Alleen voor mij" (30-10-2026): the item is then only his; nobody
+ * else in the household sees it anywhere (worker/privacy.js). A household
+ * member may set it; only he clears it. A guest never sees this.
+ */
+export function privateBlock(item) {
+  const me = store.getMe()?.member;
+  if (!item || !me || store.isGuest()) return null;
+  const mine = item.private_to === me.id;
+  if (item.private_to && !mine) return null;
+  const box = h("input", { type: "checkbox", checked: mine });
+  box.addEventListener("change", () => {
+    store.dispatch({ type: "item.private", item_id: item.id, private: box.checked }).catch((err) => {
+      box.checked = mine;
+      refused(err);
+    });
+  });
+  return h("div", { class: "private-block" },
+    h("label", { class: "rule-check" }, box, h("span", {}, t("private.toggle"))),
+    h("p", { class: "hint" }, t(mine ? "private.on" : "private.off")));
+}
+
+/** The lock a private line shows its owner. */
+export function privateMark(view, itemId) {
+  const me = store.getMe()?.member;
+  const item = itemId ? view.items?.[itemId] : null;
+  if (!me || !item?.private_to || item.private_to !== me.id) return null;
+  return h("span", { class: "lock", role: "img", "aria-label": t("private.mark"), title: t("private.mark") }, svg(LOCK_SVG));
+}
+
 // ------------------------------------------- merge an item, move a product
 
 const liveItemNamed = (view, name) => {
@@ -513,6 +543,7 @@ export function mountProduct(root, productId) {
         item ? h("button", { type: "button", class: "btn ghost", onclick: () => mergeSheet(item) }, t("merge.button")) : null),
       // Other names of the item: typed on the list, they land on it.
       item ? namesBlock(view, item) : null,
+      privateBlock(item),
       // The product's own shelf life (it wins over its item's); the item's too when it differs.
       h("div", { class: "section-head" }, h("h2", {}, t("shelf.title"))),
       productShelfLines(p, item).map((line) => h("p", { class: "hint" }, line)),

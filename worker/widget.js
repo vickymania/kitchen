@@ -14,6 +14,7 @@ import { neededSoon, notYetOp, tickEntry } from "../public/shared/needed-soon.js
 import { amsterdamDay } from "./offers.js";
 import { isDealNote } from "../public/shared/store-prices.js";
 import { purchaseScores } from "../public/shared/suggest.js";
+import { hiddenStatement, hiddenOf, rowHidden } from "./privacy.js";
 
 const OPEN = "household_id = ? AND checked_at IS NULL AND deleted_at IS NULL";
 const OPEN_ITEMS = `SELECT item_id FROM list_entries WHERE ${OPEN} AND item_id IS NOT NULL`;
@@ -31,15 +32,18 @@ const SOON_ITEMS = `household_id = ? AND deleted_at IS NULL AND (id IN (SELECT i
 
 const byId = (rows, kind) => Object.fromEntries(rows.map((r) => [r.id, fromRow(kind, r)]));
 
+/** The rows of a batch answer this member may see (worker/privacy.js). */
+const visible = (res, kind, hidden) => (hidden.empty ? res.results : res.results.filter((r) => !rowHidden(kind, r, hidden)));
+
 /**
  * The widget's payload for one household, or { rev, unchanged: true } when
  * nothing changed after `since`. today = the Dutch day the offers go by.
  */
-export async function widgetList(db, hh, since = 0, today = amsterdamDay()) {
+export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memberId = null) {
   // The rev first, like pull(): a change in between shows up next time instead of being skipped.
   const head = await db.prepare("SELECT rev FROM households WHERE id = ?").bind(hh).first();
   if (since > 0 && (head?.rev ?? 0) <= since) return { rev: head?.rev ?? 0, unchanged: true };
-  const [entries, preferences, products, purchases, offers, pantry, events, items, recipes, basket] = await db.batch([
+  const [rawEntries, rawPreferences, rawProducts, rawPurchases, rawOffers, rawPantry, rawEvents, rawItems, recipes, rawBasket, hiddenRows] = await db.batch([
     db.prepare(`SELECT * FROM list_entries WHERE ${OPEN}`).bind(hh),
     db.prepare(`SELECT * FROM preferences WHERE ${LIVE_PREFS}`).bind(hh, hh),
     db.prepare(`SELECT * FROM products WHERE household_id = ? AND deleted_at IS NULL
@@ -54,7 +58,14 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay()) {
     db.prepare(`SELECT * FROM items WHERE ${SOON_ITEMS}`).bind(hh, hh, hh, hh),
     db.prepare("SELECT id, title, servings, ingredients FROM recipes WHERE household_id = ? AND deleted_at IS NULL").bind(hh),
     db.prepare(`SELECT id, item_id, title, checked_at FROM list_entries WHERE ${BASKET}`).bind(hh),
+    // Another member's private items are not on this member's widget.
+    hiddenStatement(db, hh, memberId),
   ]);
+  const hidden = hiddenOf(hiddenRows.results);
+  const [entries, preferences, products, purchases, offers, pantry, events, items, basket] = [
+    [rawEntries, "entries"], [rawPreferences, "preferences"], [rawProducts, "products"], [rawPurchases, "purchases"], [rawOffers, "offers"],
+    [rawPantry, "pantry"], [rawEvents, "pantry_events"], [rawItems, "items"], [rawBasket, "entries"],
+  ].map(([res, kind]) => ({ results: visible(res, kind, hidden) }));
   const data = {
     preferences: byId(preferences.results, "preferences"),
     products: byId(products.results, "products"),
@@ -143,15 +154,20 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay()) {
 // Fetched at most once a day (the `day` it was made for) and after linking.
 export const NAMES_MAX = 600;
 
-export async function widgetNames(db, hh, today = amsterdamDay()) {
-  const [items, aliases, purchases, preferred] = await db.batch([
+export async function widgetNames(db, hh, today = amsterdamDay(), memberId = null) {
+  const [rawItems, rawAliases, rawPurchases, rawPreferred, hiddenRows] = await db.batch([
     db.prepare("SELECT id, name FROM items WHERE household_id = ? AND deleted_at IS NULL").bind(hh),
     db.prepare("SELECT item_id, name FROM item_aliases WHERE household_id = ? AND deleted_at IS NULL").bind(hh),
     db.prepare("SELECT item_id, bought_on FROM purchases WHERE household_id = ? AND deleted_at IS NULL AND item_id IS NOT NULL").bind(hh),
     db.prepare(`SELECT pr.item_id, p.name, p.brand, p.size FROM preferences pr
       JOIN products p ON p.id = pr.product_id AND p.household_id = pr.household_id AND p.deleted_at IS NULL
       WHERE pr.household_id = ? AND pr.deleted_at IS NULL AND pr.store = '' AND pr.recipe_id = ''`).bind(hh),
+    hiddenStatement(db, hh, memberId),
   ]);
+  // Another member's private items are never suggested to this member.
+  const hidden = hiddenOf(hiddenRows.results);
+  const [items, aliases, purchases, preferred] = [[rawItems, "items"], [rawAliases, "aliases"], [rawPurchases, "purchases"], [rawPreferred, "preferences"]]
+    .map(([res, kind]) => ({ results: visible(res, kind, hidden) }));
   const scores = purchaseScores(purchases.results, today);
   const other = new Map();
   for (const a of aliases.results) {

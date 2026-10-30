@@ -659,6 +659,12 @@
     "done": "{title} is van de lijst.",
     "undo": "Terug"
   },
+  "private": {
+    "toggle": "Alleen voor mij",
+    "on": "Alleen jij ziet dit, verder niemand in het huishouden.",
+    "off": "Iedereen in het huishouden ziet dit.",
+    "mark": "Alleen voor jou"
+  },
   "names": {
     "new": "Nieuw",
     "did_you_mean": "Bedoel je {name}?",
@@ -680,6 +686,7 @@
     "suggestions": "Suggesties"
   },
   "errors": {
+    "private_mismatch": "Een privé-item gaat niet samen met een gedeeld item.",
     "name_taken": "Die naam hoort al bij iets anders.",
     "import_off": "Recepten inlezen staat nog niet aan.",
     "too_many_imports": "Genoeg recepten ingelezen voor vandaag.",
