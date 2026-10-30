@@ -39,6 +39,8 @@ export const FREE = new Set([
   "biologisch", "biologische", "bio", "fijne", "grove", "extra", "vierge", "gedroogd", "gedroogde",
   "ongezouten", "zacht", "zachte", "koud", "koude", "warm", "warme", "lauwwarm", "lauwwarme", "hele", "heel",
   "rijpe", "rijp", "losse", "fresh", "fine", "coarse", "ground", "large", "small", "medium",
+  // A lighter version is the same thing to buy when the household has no own "light" item ("kokosmelk light").
+  "light", "lite",
 ]);
 
 /** Words that do change the product, dropped only when the household has nothing more specific. */
@@ -66,6 +68,8 @@ export function numberForms(word) {
   // Two letters only take a plural: "ui" -> "uien".
   if (w.length === 2) return VOWELS.test(w) ? [`${w}en`] : [];
   const out = [];
+  // "uien" -> "ui" (30-10-2026: "rode uien" did not find Rode ui): a two-vowel stem.
+  if (w.length === 4 && w.endsWith("en") && /^[aeiou]{2}$/.test(w.slice(0, 2))) return [w.slice(0, 2)];
   if (w.endsWith("en") && w.length >= 5) {
     const stem = w.slice(0, -2);
     out.push(stem);

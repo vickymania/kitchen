@@ -10,7 +10,7 @@
 // not follow.
 //
 // State: { recipes, items, entries, members, products, ratings, purchases, receipts, cooks, preferences,
-// pantry, pantry_events, deal_rules, pending_takes, cook_prompts, recipe_ratings, store_prices, reviews, auto_changes }
+// pantry, pantry_events, deal_rules, pending_takes, cook_prompts, recipe_ratings, store_prices, reviews, auto_changes, decisions }
 // each {id: row}. Rows hold parsed JSON (ingredients, steps, amounts, sources,
 // lines), not strings.
 import { UNIT_CODES, nameKey, mergeAmounts } from "./ingredients.js";
@@ -47,10 +47,11 @@ export const OP_TYPES = [
   "item.merge", "product.move", "item.alias", "item.private",
   "prices.sync",
   "review.save", "recipe.links",
+  "item.unmerge", "item.remove", "item.unremove", "change.undo", "item.apart", "recipe.link_fix",
   "item.translate", "recipe.translate",
 ];
 
-export const KINDS = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes"];
+export const KINDS = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes", "decisions"];
 
 export function emptyState() {
   return Object.fromEntries(KINDS.map((k) => [k, {}]));
@@ -66,6 +67,36 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** The nightly report (review.save): at most this many lines per list, each this long. */
 export const REVIEW_MAX_LINES = 30;
 export const REVIEW_LINE_MAX = 300;
+/** A merge question names at most this many items. */
+export const DECIDE_NAMES_MAX = 12;
+
+/**
+ * The report's questions: a plain line, or { text, ids?, names?, into? } for
+ * a merge question the app answers with "Samenvoegen" / "Apart houden"
+ * (public/app/review.js): ids the items by id (the rules' questions), names
+ * by name (Claude's), into the clean target when the rules know it.
+ */
+function decideLines(v) {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > REVIEW_MAX_LINES) throw new OpError("bad_field", "decide");
+  return v.map((x) => {
+    if (typeof x === "string") return text(x, REVIEW_LINE_MAX, "decide");
+    if (!x || typeof x !== "object") throw new OpError("bad_field", "decide");
+    const line = text(x.text, REVIEW_LINE_MAX, "decide.text");
+    if (!line) return "";
+    const list = (arr, check) => {
+      if (arr === undefined || arr === null) return undefined;
+      if (!Array.isArray(arr) || arr.length > DECIDE_NAMES_MAX) throw new OpError("bad_field", "decide");
+      return arr.map(check);
+    };
+    const ids = list(x.ids, (i) => id(i, "decide.ids"));
+    const names = list(x.names, (n) => text(n, 120, "decide.names"))?.filter(Boolean);
+    const into = x.into === undefined || x.into === null ? undefined : id(x.into, "decide.into");
+    if (!ids?.length && !(names?.length > 1)) return line;
+    return { text: line, ...(ids?.length ? { ids } : {}), ...(names?.length ? { names } : {}), ...(into ? { into } : {}) };
+  }).filter(Boolean);
+}
+
 /** The nightly changelog (auto_changes) keeps this many days; review.save tombstones older rows. */
 export const AUTO_CHANGES_DAYS = 60;
 
@@ -162,7 +193,7 @@ function resolveItem(state, ctx, title, newItemId) {
   // comes back to life instead of a second row.
   const dead = Object.values(state.items).find((i) => i.deleted_at && i.name_key === key && !aliasTarget(state.items, i));
   if (dead) {
-    Object.assign(dead, { name: title, deleted_at: null, merged_into: null, created_at: ctx.now });
+    Object.assign(dead, { name: title, deleted_at: null, merged_into: null, undo_rows: null, created_at: ctx.now });
     ctx.touch("items", dead.id);
     return dead;
   }
@@ -198,6 +229,61 @@ export const samePrivacy = (a, b) => (a?.private_to ?? null) === (b?.private_to 
 
 /** Rows that still point at an item: a live one keeps it alive. */
 const ITEM_ROWS = ["entries", "purchases", "products", "pantry", "pantry_events", "preferences", "deal_rules", "pending_takes", "aliases"];
+
+/** The rows item.remove buries with the item (its products refuse the removal). */
+const REMOVE_ROWS = ["entries", "aliases", "pantry", "purchases", "preferences", "deal_rules", "pending_takes"];
+
+/** A short stable hash (FNV-1a, hex) for decision ids. */
+function fnv(s) {
+  let h = 0x811c9dc5;
+  for (const ch of String(s)) {
+    h ^= ch.codePointAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** The two name keys of an "apart" decision, sorted: one row per pair. */
+export function apartPair(a, b) {
+  return [nameKey(a), nameKey(b)].sort();
+}
+
+/** The id of a decision (item_decisions): one row per decision ever. */
+export function decisionId(kind, a, b = "") {
+  return `dec-${kind}-${fnv(`${a}|${b}`)}${fnv(`${b}|${a}|${kind}`)}`;
+}
+
+/**
+ * A decision of the household (table item_decisions): apart (two names),
+ * no_alias, no_rename, no_move, keep. For apart, a and b are names; else ids
+ * or keys, with the names shown in an_name / b_name. Returns the row id.
+ */
+function putDecision(state, ctx, kind, a, b = "", aName = null, bName = null) {
+  if (!state.decisions) state.decisions = {};
+  let keyA = String(a ?? ""), keyB = String(b ?? "");
+  let names = [aName, bName];
+  if (kind === "apart") {
+    [keyA, keyB] = apartPair(a, b);
+    names = nameKey(a) === keyA ? [a, b] : [b, a];
+    if (!keyA || !keyB || keyA === keyB) return null;
+  }
+  const rid = decisionId(kind, keyA, keyB);
+  const row = state.decisions[rid];
+  if (row && !row.deleted_at) return rid;
+  state.decisions[rid] = { ...(row ?? { id: rid, created_by: ctx.memberId ?? null, created_at: ctx.now }), kind, a: keyA, b: keyB,
+    a_name: names[0] ?? null, b_name: names[1] ?? null, updated_at: ctx.now, deleted_at: null };
+  ctx.touch("decisions", rid);
+  return rid;
+}
+
+/** The lines of a recipe.links op with the household's own fixes (recipe.link_fix) put back. */
+export function keepFixed(lines, fixed) {
+  if (!fixed) return lines;
+  return lines.map((l) => {
+    const f = fixed[nameKey(l.name)];
+    return f?.item_id ? { name: l.name, item_id: f.item_id, item: f.item ?? "", how: "person" } : l;
+  });
+}
 
 /**
  * A line's own new item after the line went elsewhere: a tombstone when
@@ -904,7 +990,7 @@ const PREFERENCE_COPY = ["store", "product_id"];
  * own, the row itself moves. A cleared row of the from-item only moves when
  * into has nothing for that scope. Returns 1 when into gained a live row.
  */
-function moveScopedRow(ctx, kind, row, intoRow, into, fields) {
+function moveScopedRow(ctx, kind, row, intoRow, into, fields, log = null) {
   if (intoRow === row) return 0;
   const bury = (r) => {
     r.deleted_at = ctx.now;
@@ -912,14 +998,17 @@ function moveScopedRow(ctx, kind, row, intoRow, into, fields) {
     ctx.touch(kind, r.id);
   };
   if (!intoRow) {
+    log?.push({ kind, id: row.id, how: "moved" });
     moveRow(ctx, kind, row, into);
     return row.deleted_at ? 0 : 1;
   }
   if (row.deleted_at) return 0;
   if (!intoRow.deleted_at) {
+    log?.push({ kind, id: row.id, how: "buried" });
     bury(row);
     return 0;
   }
+  log?.push({ kind, id: row.id, how: "revived", into_id: intoRow.id, before: { ...Object.fromEntries(fields.map((f) => [f, intoRow[f] ?? null])), deleted_at: intoRow.deleted_at } });
   for (const f of fields) intoRow[f] = row[f];
   intoRow.deleted_at = null;
   intoRow.updated_at = ctx.now;
@@ -944,10 +1033,13 @@ const ownRate = (x) => hasRate(x) && (x.rate_source === "person" || x.rate_sourc
  * (a person's or learned) stays; else from's when it is its own or into has
  * none at all; Claude's guess on both: into's stays. Returns whether into changed.
  */
-function copyMissingSettings(into, from) {
+function copyMissingSettings(into, from, before = {}) {
   let changed = false;
   const take = (fields) => {
-    for (const f of fields) into[f] = from[f] ?? null;
+    for (const f of fields) {
+      if (!(f in before)) before[f] = into[f] ?? null;
+      into[f] = from[f] ?? null;
+    }
     changed = true;
   };
   if (!ownRate(into) && hasRate(from) && (ownRate(from) || !hasRate(into))) take(["use_per_day", "rate_source", "rate_samples"]);
@@ -955,6 +1047,8 @@ function copyMissingSettings(into, from) {
     if ((into[f] ?? null) === null && (from[f] ?? null) !== null) take([f]);
   }
   if (!into.shelf_source && from.shelf_source) take(["shelf_days", "opened_days", "shelf_source"]);
+  // The English name (0029), when into has none: recorded like the rest, so item.unmerge gives it back.
+  if (!into.name_en && from.name_en) take(["name_en", "name_en_key", "name_en_source"]);
   return changed;
 }
 
@@ -1953,7 +2047,7 @@ const HANDLERS = {
       day,
       run_ok: op.run_ok === false ? 0 : 1,
       fixed,
-      decide: lines(op.decide, "decide"),
+      decide: decideLines(op.decide),
       errors: lines(op.errors, "errors"),
       turns: num(op.turns, "turns", { max: 1000 }),
       cost_cents: num(op.cost_cents, "cost_cents", { max: 100000 }),
@@ -1995,7 +2089,9 @@ const HANDLERS = {
       return { name, item_id: null, reason: l.reason };
     });
     const at = typeof op.at === "string" ? op.at.slice(0, 40) : null;
-    r.ingredient_links = { at, lines };
+    // A line the household fixed by hand (recipe.link_fix) stays as they said.
+    const fixed = r.ingredient_links?.fixed ?? null;
+    r.ingredient_links = { at, lines: keepFixed(lines, fixed), ...(fixed ? { fixed } : {}) };
     ctx.touch("recipes", r.id);
     return { linked: lines.filter((l) => l.item_id).length, lines: lines.length };
   },
@@ -2034,10 +2130,14 @@ const HANDLERS = {
     settleItem(state, ctx, from.id, day);
     settleItem(state, ctx, into.id, day);
     const moved = emptyMoved();
+    // Exactly what moves, kept on the from-item's tombstone (undo_rows) for item.unmerge.
+    const rec = { kind: "merge", into: into.id, at: ctx.now, rows: {}, folded: [], scoped: [], aliases: [], alias: null, settings: {} };
+    const keep = (kind, rowId) => (rec.rows[kind] ??= []).push(rowId);
     for (const kind of ["purchases", "products", "pantry", "pantry_events", "pending_takes"]) {
       for (const row of Object.values(state[kind])) {
         if (row.item_id !== from.id || row.deleted_at) continue;
         moveRow(ctx, kind, row, into);
+        keep(kind, row.id);
         moved[kind]++;
       }
     }
@@ -2045,6 +2145,7 @@ const HANDLERS = {
       if (e.item_id !== from.id || e.deleted_at) continue;
       const open = e.checked_at ? null : openEntryFor(state, into.id);
       if (open) {
+        rec.folded.push({ id: e.id, into_id: open.id, before: { amounts: open.amounts ?? null, sources: open.sources ?? null, note: open.note ?? "" } });
         mergeInto(open, e, ctx);
         e.deleted_at = ctx.now;
         e.updated_at = ctx.now;
@@ -2052,18 +2153,19 @@ const HANDLERS = {
         moved.entries_merged++;
       } else {
         moveRow(ctx, "entries", e, into);
+        keep("entries", e.id);
         moved.entries++;
       }
     }
     for (const row of Object.values(state.preferences)) {
       if (row.item_id !== from.id) continue;
-      moved.preferences += moveScopedRow(ctx, "preferences", row, scopeRow(state, into.id, row.store, row.recipe_id), into, PREFERENCE_COPY);
+      moved.preferences += moveScopedRow(ctx, "preferences", row, scopeRow(state, into.id, row.store, row.recipe_id), into, PREFERENCE_COPY, rec.scoped);
     }
     for (const row of Object.values(state.deal_rules)) {
       if (row.item_id !== from.id) continue;
-      moved.deal_rules += moveScopedRow(ctx, "deal_rules", row, ruleRow(state, into.id, row.product_id ?? ""), into, Object.keys(RULE_FIELDS));
+      moved.deal_rules += moveScopedRow(ctx, "deal_rules", row, ruleRow(state, into.id, row.product_id ?? ""), into, Object.keys(RULE_FIELDS), rec.scoped);
     }
-    if (copyMissingSettings(into, from)) ctx.touch("items", into.id);
+    if (copyMissingSettings(into, from, rec.settings)) ctx.touch("items", into.id);
     from.deleted_at = ctx.now;
     from.merged_into = into.id;
     ctx.touch("items", from.id);
@@ -2073,9 +2175,261 @@ const HANDLERS = {
       if (a.item_id !== from.id || a.deleted_at) continue;
       Object.assign(a, { item_id: into.id, updated_at: ctx.now });
       ctx.touch("aliases", a.id);
+      rec.aliases.push(a.id);
     }
-    putAlias(state, ctx, into, from.name, `ma-${from.id}`);
+    const old = Object.values(state.aliases).find((a) => a.name_key === nameKey(from.name)) ?? state.aliases[`ma-${from.id}`];
+    const aliasBefore = old ? { item_id: old.item_id, name: old.name, name_key: old.name_key, deleted_at: old.deleted_at ?? null } : null;
+    rec.alias = { id: putAlias(state, ctx, into, from.name, `ma-${from.id}`), before: aliasBefore };
+    from.undo_rows = rec;
     return { item_id: into.id, moved };
+  },
+
+  // A merge undone (30-10-2026: "Terugdraaien" on every line of the
+  // nightly changelog). { item_id: the merged-away item, on }: the item comes
+  // back to life and every row item.merge recorded on its tombstone
+  // (undo_rows) that is still on the item it went into goes back; a list line
+  // it was folded into gets its old amounts back while nobody touched it
+  // since; into's settings it took over go back while unchanged. Rows added
+  // to into after the merge stay there. The two names are kept apart from
+  // now on (decision apart): the nightly check never merges them again. A
+  // merge from before 30-10-2026 has no record: only the name comes back
+  // (rows_unknown). A phone (ctx.partial: it keeps no tombstones) cannot see
+  // the record: it answers { pending: true } and the server does the work.
+  "item.unmerge"(state, op, ctx) {
+    const day = date(op.on, "on");
+    const from = state.items[id(op.item_id, "item_id")];
+    if (!from) {
+      if (ctx.partial) return { pending: true };
+      throw new OpError("not_found", "item");
+    }
+    if (!from.deleted_at) return { item_id: from.id, already: true };
+    const rec = from.undo_rows?.kind === "merge" ? from.undo_rows : null;
+    const holder = aliasTarget(state.items, state.items[rec?.into ?? from.merged_into]);
+    if (!from.merged_into || !holder) throw new OpError("cannot_undo");
+    if (!samePrivacy(from, holder)) throw new OpError("private_mismatch");
+    settleItem(state, ctx, holder.id, day);
+    // Rows that went into a merged chain may sit on its live end.
+    const holders = new Set([holder.id, rec?.into ?? from.merged_into]);
+    Object.assign(from, { deleted_at: null, merged_into: null, undo_rows: null });
+    ctx.touch("items", from.id);
+    const moved = emptyMoved();
+    for (const [kind, ids] of Object.entries(rec?.rows ?? {})) {
+      for (const rowId of ids) {
+        const row = state[kind]?.[rowId];
+        if (!row || !holders.has(row.item_id)) continue;
+        moveRow(ctx, kind, row, from);
+        if (kind in moved) moved[kind]++;
+      }
+    }
+    for (const f of rec?.folded ?? []) {
+      const e = state.entries[f.id];
+      const open = state.entries[f.into_id];
+      if (!e || !e.deleted_at || !open || open.deleted_at || open.checked_at || open.updated_at !== rec.at) continue;
+      Object.assign(open, { amounts: f.before.amounts, sources: f.before.sources, note: f.before.note, updated_at: ctx.now });
+      ctx.touch("entries", open.id);
+      Object.assign(e, { deleted_at: null, updated_at: ctx.now, item_id: from.id, title: from.name });
+      ctx.touch("entries", e.id);
+      moved.entries++;
+    }
+    for (const sc of rec?.scoped ?? []) {
+      const row = state[sc.kind]?.[sc.id];
+      if (!row) continue;
+      if (sc.how === "moved") {
+        if (!holders.has(row.item_id)) continue;
+        row.item_id = from.id;
+      } else {
+        if (row.item_id !== from.id || !row.deleted_at) continue;
+        row.deleted_at = null;
+        const intoRow = sc.how === "revived" ? state[sc.kind]?.[sc.into_id] : null;
+        if (intoRow && intoRow.updated_at === rec.at) {
+          Object.assign(intoRow, sc.before, { updated_at: ctx.now });
+          ctx.touch(sc.kind, intoRow.id);
+        }
+      }
+      row.updated_at = ctx.now;
+      ctx.touch(sc.kind, row.id);
+      moved[sc.kind]++;
+    }
+    for (const aliasId of rec?.aliases ?? []) {
+      const a = state.aliases[aliasId];
+      if (!a || a.deleted_at || !holders.has(a.item_id)) continue;
+      Object.assign(a, { item_id: from.id, updated_at: ctx.now });
+      ctx.touch("aliases", a.id);
+    }
+    // Its own name is its own again: the merge's alias row goes (or back to what it was).
+    const own = (rec?.alias && state.aliases[rec.alias.id])
+      ?? Object.values(state.aliases).find((a) => a.name_key === from.name_key && !a.deleted_at && holders.has(a.item_id));
+    if (own) {
+      if (rec?.alias?.before && rec.alias.id === own.id) Object.assign(own, rec.alias.before, { updated_at: ctx.now });
+      else Object.assign(own, { deleted_at: ctx.now, updated_at: ctx.now });
+      ctx.touch("aliases", own.id);
+    }
+    let settled = false;
+    for (const [f, v] of Object.entries(rec?.settings ?? {})) {
+      if ((holder[f] ?? null) !== (from[f] ?? null)) continue;
+      holder[f] = v;
+      settled = true;
+    }
+    if (settled) ctx.touch("items", holder.id);
+    putDecision(state, ctx, "apart", from.name, holder.name);
+    return { item_id: from.id, into_id: holder.id, moved, ...(rec ? {} : { rows_unknown: true }) };
+  },
+
+  // A name that is no thing (30-10-2026, about old To Do lines such
+  // as "Lunch", "Meer tapas", "Electronica bak": "die generic dingen horen
+  // niet eens in mijn database, weg ermee"). { item_id, on }: the item becomes
+  // a tombstone, and so do its list lines, other names, pantry rows,
+  // preferences, deal rules and purchases (the old lines are notes, not
+  // goods). An item with a product is a real thing: refused (has_products).
+  // What it buried is kept on the tombstone (undo_rows) for item.unremove.
+  // The reviewer device may only remove what the junk rule flags
+  // (worker/api.js, public/shared/dedupe.js junkItem).
+  "item.remove"(state, op, ctx) {
+    date(op.on, "on");
+    const item = state.items[id(op.item_id, "item_id")];
+    if (!item) {
+      if (ctx.partial) return { pending: true };
+      throw new OpError("not_found", "item");
+    }
+    if (item.deleted_at) {
+      if (item.undo_rows?.kind === "remove") return { item_id: item.id, already: true };
+      throw new OpError("not_found", "item");
+    }
+    if (Object.values(state.products).some((p) => p.item_id === item.id && !p.deleted_at)) throw new OpError("has_products");
+    const rec = { kind: "remove", at: ctx.now, rows: {} };
+    const counts = {};
+    for (const kind of REMOVE_ROWS) {
+      for (const row of Object.values(state[kind] ?? {})) {
+        if (row.item_id !== item.id || row.deleted_at) continue;
+        row.deleted_at = ctx.now;
+        if (kind !== "purchases") row.updated_at = ctx.now;
+        ctx.touch(kind, row.id);
+        (rec.rows[kind] ??= []).push(row.id);
+        counts[kind] = (counts[kind] ?? 0) + 1;
+      }
+    }
+    Object.assign(item, { deleted_at: ctx.now, merged_into: null, undo_rows: rec });
+    ctx.touch("items", item.id);
+    return { item_id: item.id, removed: counts };
+  },
+
+  // A removal undone: the item and every row item.remove buried come back.
+  // The item is no junk from now on (decision keep).
+  "item.unremove"(state, op, ctx) {
+    const item = state.items[id(op.item_id, "item_id")];
+    if (!item) {
+      if (ctx.partial) return { pending: true };
+      throw new OpError("not_found", "item");
+    }
+    if (!item.deleted_at) {
+      putDecision(state, ctx, "keep", item.id, "", item.name);
+      return { item_id: item.id, already: true };
+    }
+    const rec = item.undo_rows;
+    if (rec?.kind !== "remove") throw new OpError("cannot_undo");
+    Object.assign(item, { deleted_at: null, undo_rows: null });
+    ctx.touch("items", item.id);
+    for (const [kind, ids] of Object.entries(rec.rows ?? {})) {
+      for (const rowId of ids) {
+        const row = state[kind]?.[rowId];
+        if (!row || row.item_id !== item.id || row.deleted_at !== rec.at) continue;
+        // An open list line comes back only when the item has no open line by now.
+        if (kind === "entries" && !row.checked_at && openEntryFor(state, item.id, row.id)) continue;
+        row.deleted_at = null;
+        if (kind !== "purchases") row.updated_at = ctx.now;
+        ctx.touch(kind, row.id);
+      }
+    }
+    putDecision(state, ctx, "keep", item.id, "", item.name);
+    return { item_id: item.id };
+  },
+
+  // "Apart houden" (30-10-2026: "waarom geen knoppen om te zeggen ja
+  // merge of nee niet doen?"): { names: [2..12 names] } are separate things,
+  // every pair of them. The nightly check never merges them and never asks
+  // again (public/shared/dedupe.js planGroups, mergeProblem; worker/api.js).
+  "item.apart"(state, op, ctx) {
+    if (!Array.isArray(op.names) || op.names.length < 2 || op.names.length > 12) throw new OpError("bad_field", "names");
+    const names = [...new Map(op.names.map((n) => text(n, 120, "names")).filter((n) => nameKey(n)).map((n) => [nameKey(n), n])).values()];
+    if (names.length < 2) throw new OpError("bad_field", "names");
+    let n = 0;
+    for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++, n++) putDecision(state, ctx, "apart", names[i], names[j]);
+    return { decisions: n };
+  },
+
+  // A line of the nightly changelog undone in one tap (30-10-2026:
+  // "Waarom heb ik niet direct een knop 'terugdraaien'?"). { change_id, on }:
+  // a merge is unmerged (item.unmerge), a moved product goes back to the
+  // item it came from, another name is removed, a rename gets the old
+  // spelling back, a removed item comes back. The line says "Teruggedraaid"
+  // (undone_at), and a decision makes sure the nightly check never does it
+  // again. A recipe's links are corrected per line instead (recipe.link_fix).
+  "change.undo"(state, op, ctx) {
+    const c = state.auto_changes?.[id(op.change_id, "change_id")];
+    if (!c || c.deleted_at) throw new OpError("not_found", "change");
+    if (c.undone_at) return { change_id: c.id, already: true };
+    const on = date(op.on, "on");
+    const u = c.undo ?? {};
+    let result = {};
+    if (c.what === "merge") {
+      const fromId = u.from_item_id
+        ?? Object.values(state.items).find((i) => i.deleted_at && i.merged_into && i.name_key === nameKey(c.name))?.id;
+      if (!fromId && !ctx.partial) throw new OpError("cannot_undo");
+      result = fromId ? HANDLERS["item.unmerge"](state, { item_id: fromId, on }, ctx) : { pending: true };
+    } else if (c.what === "move") {
+      if (!u.from_item_id || !c.product_id) throw new OpError("cannot_undo");
+      const back = aliasTarget(state.items, state.items[u.from_item_id]);
+      if (!back) throw new OpError("not_found", "item");
+      result = HANDLERS["product.move"](state, { product_id: c.product_id, item_id: back.id, on }, ctx);
+      putDecision(state, ctx, "no_move", c.product_id, c.item_id ?? "", c.name, c.target);
+    } else if (c.what === "alias") {
+      const item = aliasTarget(state.items, state.items[c.item_id]);
+      if (item) result = HANDLERS["item.alias"](state, { item_id: item.id, name: c.name, remove: true }, ctx);
+      putDecision(state, ctx, "no_alias", nameKey(c.name), c.item_id ?? "", c.name, c.target);
+    } else if (c.what === "rename") {
+      const item = state.items[c.item_id];
+      if (item && !item.deleted_at && nameKey(c.name) === item.name_key && item.name !== c.name) {
+        item.name = c.name;
+        ctx.touch("items", item.id);
+      }
+      putDecision(state, ctx, "no_rename", c.item_id ?? "", "", c.name, c.target);
+    } else if (c.what === "remove") {
+      result = HANDLERS["item.unremove"](state, { item_id: u.item_id ?? c.item_id, on }, ctx);
+    } else if (c.what === "translate") {
+      // The English name before the night's (0029), while nobody changed it since.
+      const item = state.items[c.item_id];
+      if (item && !item.deleted_at && (item.name_en ?? "") === (c.target ?? "")) {
+        const was = u.name_en ?? null;
+        Object.assign(item, { name_en: was, name_en_key: was ? nameKey(was) : null, name_en_source: was ? u.name_en_source ?? "person" : null });
+        ctx.touch("items", item.id);
+      }
+      putDecision(state, ctx, "no_translate", c.item_id ?? "", nameKey(c.target ?? ""), c.name, c.target);
+    } else {
+      throw new OpError("cannot_undo");
+    }
+    c.undone_at = ctx.now;
+    c.updated_at = ctx.now;
+    ctx.touch("auto_changes", c.id);
+    return { ...result, change_id: c.id };
+  },
+
+  // "Klopt niet" on a linked recipe line (30-10-2026): { recipe_id,
+  // name, item_id } links that line to the item he picked (how "person"),
+  // and keeps it: the nightly check's recipe.links never overrides a line
+  // the household fixed (ingredient_links.fixed: name key -> item id).
+  "recipe.link_fix"(state, op, ctx) {
+    const r = state.recipes[id(op.recipe_id, "recipe_id")];
+    if (!r || r.deleted_at) throw new OpError("not_found", "recipe");
+    const name = text(op.name, 120, "name");
+    if (!name) throw new OpError("name_required", "name");
+    const item = aliasTarget(state.items, state.items[id(op.item_id, "item_id")]);
+    if (!item) throw new OpError("not_found", "item");
+    const links = r.ingredient_links ?? { at: r.updated_at ?? null, lines: [] };
+    if (!(links.lines ?? []).some((l) => l.name === name)) throw new OpError("not_found", "line");
+    const lines = links.lines.map((l) => (l.name === name ? { name, item_id: item.id, item: item.name, how: "person" } : l));
+    r.ingredient_links = { ...links, lines, fixed: { ...(links.fixed ?? {}), [nameKey(name)]: { item_id: item.id, item: item.name } } };
+    ctx.touch("recipes", r.id);
+    return { item_id: item.id };
   },
 
   // One product goes to another item, with its purchases, pantry rows and
@@ -2251,14 +2605,15 @@ export function applyOp(state, op, ctx) {
 }
 
 /** Ops whose effect the nightly check's changelog records (auto_changes). */
-export const LOGGED_OPS = ["item.merge", "product.move", "item.alias", "item.rename", "recipe.links", "item.translate"];
+export const LOGGED_OPS = ["item.merge", "product.move", "item.alias", "item.rename", "recipe.links", "item.translate", "item.remove"];
 
-/** What a logged op's row needs from before it ran: the merged item's or the renamed item's name. */
+/** What a logged op's row needs from before it ran: the merged, renamed or removed item's name; the item a product was on. */
 function beforeChange(state, op) {
-  if (op.type === "item.merge" || op.type === "item.rename") {
+  if (op.type === "item.merge" || op.type === "item.rename" || op.type === "item.remove") {
     return { name: state.items[op.type === "item.merge" ? op.from_item_id : op.item_id]?.name ?? "" };
   }
-  if (op.type === "item.translate") return { name_en: state.items[op.item_id]?.name_en ?? null };
+  if (op.type === "product.move") return { item_id: state.products[op.product_id]?.item_id ?? null };
+  if (op.type === "item.translate") return { name_en: state.items[op.item_id]?.name_en ?? null, name_en_source: state.items[op.item_id]?.name_en_source ?? null };
   return {};
 }
 
@@ -2278,18 +2633,21 @@ export function changeProductName(p) {
 function logChange(state, op, result, before, ctx) {
   if (!LOGGED_OPS.includes(op.type) || !result || result.already) return;
   let row = null;
+  // `undo`: what change.undo needs to put it back.
   if (op.type === "item.merge") {
-    row = { what: "merge", name: before.name, target: state.items[result.item_id]?.name ?? "", item_id: result.item_id ?? null, product_id: null };
+    row = { what: "merge", name: before.name, target: state.items[result.item_id]?.name ?? "", item_id: result.item_id ?? null, product_id: null,
+      undo: { from_item_id: op.from_item_id } };
   } else if (op.type === "product.move") {
     if (!Object.values(result.moved ?? {}).some((n) => n > 0)) return;
     const p = state.products[op.product_id];
-    row = { what: "move", name: changeProductName(p), target: state.items[result.item_id]?.name ?? "", item_id: result.item_id ?? null, product_id: p?.id ?? null };
+    row = { what: "move", name: changeProductName(p), target: state.items[result.item_id]?.name ?? "", item_id: result.item_id ?? null, product_id: p?.id ?? null,
+      undo: before.item_id && before.item_id !== result.item_id ? { from_item_id: before.item_id } : null };
   } else if (op.type === "item.alias") {
     if (op.remove === true || !result.alias_id) return;
     const item = aliasTarget(state.items, state.items[op.item_id]);
     // `reason`: why the check thinks so ("spelling"), a few words, only for the changelog.
     row = { what: "alias", name: String(op.name ?? "").trim(), target: item?.name ?? "", item_id: item?.id ?? null, product_id: null,
-      reason: typeof op.reason === "string" ? op.reason.replace(/\s+/g, " ").trim().slice(0, 60) || null : null };
+      reason: typeof op.reason === "string" ? op.reason.replace(/\s+/g, " ").trim().slice(0, 60) || null : null, undo: { alias_id: result.alias_id } };
   } else if (op.type === "item.rename") {
     const item = state.items[op.item_id];
     if (!item || item.name === before.name) return;
@@ -2297,16 +2655,22 @@ function logChange(state, op, result, before, ctx) {
   } else if (op.type === "item.translate") {
     const item = state.items[op.item_id];
     if (!item || result.kept || (item.name_en ?? null) === before.name_en) return;
-    row = { what: "translate", name: item.name, target: item.name_en ?? "", item_id: item.id, product_id: null };
+    row = { what: "translate", name: item.name, target: item.name_en ?? "", item_id: item.id, product_id: null,
+      undo: { name_en: before.name_en ?? null, name_en_source: before.name_en_source ?? null } };
   } else if (op.type === "recipe.links") {
     const r = state.recipes[op.recipe_id];
     const lines = r?.ingredient_links?.lines ?? [];
-    row = { what: "recipe", name: r?.title ?? "", target: `${result.linked}/${result.lines}`, item_id: null, product_id: null, lines };
+    row = { what: "recipe", name: r?.title ?? "", target: `${result.linked}/${result.lines}`, item_id: null, product_id: null, lines,
+      undo: { recipe_id: op.recipe_id } };
+  } else if (op.type === "item.remove") {
+    // `reason`: why it is junk (public/shared/dedupe.js junkReason), from the op.
+    row = { what: "remove", name: before.name, target: "", item_id: op.item_id, product_id: null, undo: { item_id: op.item_id },
+      reason: typeof op.reason === "string" ? op.reason.replace(/\s+/g, " ").trim().slice(0, 60) || null : null };
   }
   if (!row?.name) return;
   if (!state.auto_changes) state.auto_changes = {};
   const rid = `ac-${typeof op.op_id === "string" && op.op_id ? op.op_id : `${op.type}-${ctx.now}`}`;
   const day = typeof op.on === "string" && DATE_RE.test(op.on) ? op.on : String(ctx.now).slice(0, 10);
-  state.auto_changes[rid] = { id: rid, day, reason: null, lines: null, ...row, created_at: ctx.now, updated_at: ctx.now, deleted_at: null };
+  state.auto_changes[rid] = { id: rid, day, reason: null, lines: null, undo: null, undone_at: null, ...row, created_at: ctx.now, updated_at: ctx.now, deleted_at: null };
   ctx.touch("auto_changes", rid);
 }

@@ -385,9 +385,7 @@
   },
   "review": {
     "change_translate": "{name} is called {target} in English",
-    "undo_translate": "Undo: open the product, English name.",
     "change_recipe": "{name}: {linked} of {total} ingredients linked",
-    "undo_recipe": "Something wrong? Say so and I will fix it.",
     "link_to": "'{name}' → {item} ({how})",
     "link_none": "'{name}': {reason}",
     "label": "Night check",
@@ -407,10 +405,22 @@
     "change_move": "{name} moved to {target}",
     "change_alias": "{name} now also means {target}",
     "change_rename": "{name} is now called {target}",
-    "undo_merge": "Cannot be undone. Say so and I will split it.",
+    "change_remove": "{name} removed",
     "undo_move": "Undo: open the product, Belongs to something else…",
-    "undo_alias": "Undo: open the product, Other names, ×.",
-    "undo_rename": "Say so if the old name must come back."
+    "undo": "Undo",
+    "undone": "Undone",
+    "undone_toast": "{name} is undone.",
+    "link_wrong": "Not right",
+    "link_title": "Which item is '{name}'?",
+    "link_hint": "Pick the right item. The recipe remembers it.",
+    "link_item": "Item",
+    "link_fixed": "'{name}' now goes with {item}",
+    "merge_yes": "Merge",
+    "merge_no": "Keep apart",
+    "merged": "Merged",
+    "merged_into": "Merged into {target}",
+    "kept_apart": "Kept apart",
+    "pick_two": "Pick at least two."
   },
   "prices": { "label": "Prices", "of": "prices of {day}" },
   "cooked": {
@@ -646,7 +656,7 @@
     "into": "Merge into",
     "pick": "Pick an item from the list.",
     "unknown": "No item with that name.",
-    "summary": "{from} becomes {into}. Typing {from} later lands on {into} too. This cannot be undone.",
+    "summary": "{from} becomes {into}. Typing {from} later lands on {into} too. Undo it under Other names.",
     "do": "Merge",
     "done": "{from} is part of {into} now.",
     "count_purchases": {"one": "1 purchase", "other": "{n} purchases"},
@@ -694,7 +704,7 @@
     "also": "also: {alias}",
     "typed": "typed: {text}",
     "title": "Other names",
-    "none": "No other names yet.",
+    "none": "No other names yet.", "unmerge": "undo", "unmerged": "{alias} is its own item again.",
     "add": "Add a name",
     "add_title": "Another name for {item}",
     "save": "Add",
@@ -703,7 +713,7 @@
     "no_match": "Nothing found.",
     "suggestions": "Suggestions"
   },
-  "errors": {
+  "errors": {"has_products": "This item has products. Merge it into another item instead.", "cannot_undo": "This can no longer be undone.", 
     "private_mismatch": "A private item does not merge with a shared one.",
     "name_taken": "That name already belongs to something else.",
     "import_off": "Reading recipes is not switched on yet.",
@@ -816,5 +826,5 @@
     "bottle": { "one": "bottle", "other": "bottles" },
     "bowl": { "one": "tray", "other": "trays" }
   },
-  "link": {"how": {"exact": "same name", "same": "same product", "number": "singular or plural", "plain": "without an extra word", "compound": "a kind of it", "general": "more general", "parts": "per part"}, "reason": {"excluded": "on the never-suggest list", "tap": "tap water", "tool": "a tool, not stock", "several": "names several things", "never": "no item yet, never bought"}}
+  "link": {"how": {"exact": "same name", "same": "same product", "number": "singular or plural", "plain": "without an extra word", "compound": "a kind of it", "general": "more general", "english": "English word", "person": "picked by you", "parts": "per part"}, "reason": {"excluded": "on the never-suggest list", "tap": "tap water", "tool": "a tool, not stock", "several": "names several things", "never": "no item yet, never bought"}}
 }

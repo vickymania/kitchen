@@ -70,7 +70,9 @@ async function idbClear() {
 // ------------------------------------------------------------- the view
 
 function ctxFor(op) {
-  return { memberId: me?.member.id, isAdmin: Boolean(me?.member.is_admin), now: op.at };
+  // partial: the phone keeps no tombstones, so an undo it cannot see answers
+  // { pending: true } here and the server does the work (public/shared/ops.js).
+  return { memberId: me?.member.id, isAdmin: Boolean(me?.member.is_admin), now: op.at, partial: true };
 }
 
 let lastSignature = "";

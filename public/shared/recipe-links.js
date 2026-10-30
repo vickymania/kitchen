@@ -18,7 +18,7 @@ import { isExcluded, isExcludedLookalike } from "./excluded.js";
 import { alternativesOf, itemFinder, listTargets, resolveIngredient } from "./ingredient-match.js";
 
 /** How a line found its item (matchKeys' `how`), and why a line found none. */
-export const LINK_HOWS = ["exact", "same", "number", "plain", "compound", "general", "parts"];
+export const LINK_HOWS = ["exact", "same", "number", "plain", "compound", "general", "english", "parts", "person"];
 export const LINK_REASONS = ["excluded", "tap", "tool", "several", "never"];
 
 /** Water from the tap: never bought, never in the pantry. */

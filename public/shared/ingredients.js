@@ -70,11 +70,12 @@ function readNumber(text) {
 // How a thing is prepared, as a word or a phrase: a past participle
 // ("losgeklopt", "fijngehakt", "uitgelekt", "gesmolten", "fijngesneden"), a "ver-" one
 // ("verkruimeld"), a temperature ("lauwwarm", "op kamertemperatuur"), a cut
-// ("in blokjes"). "gehakt" alone is mince, never a note.
+// ("in blokjes"), a garnish ("ter garnering", 30-10-2026: "Sesamzaad ter
+// garnering" found no Sesamzaad). "gehakt" alone is mince, never a note.
 const PARTICIPLE = String.raw`(?:[a-z]{0,8}ge[a-z]{2,}[dt]|[a-z]{0,8}ge(?:smolten|bakken|sneden|braden)|ver(?:kruimeld|brokkeld|warmd|deeld|snipperd))`;
 const EN_ADV = String.raw`(?:thinly|finely|roughly|coarsely|freshly)`;
 const EN_PREP = String.raw`(?:minced|chopped|sliced|diced|grated|peeled|toasted|melted|softened|cubed)`;
-const PREP_WORD = String.raw`(?:${PARTICIPLE}|lauw(?:warm)?|(?:op )?kamertemperatuur|in (?:blokjes|plakjes|stukjes|reepjes|ringen|partjes|de lengte .+)|(?:${EN_ADV}\s+)?${EN_PREP}|cut into .+)`;
+const PREP_WORD = String.raw`(?:${PARTICIPLE}|lauw(?:warm)?|(?:op )?kamertemperatuur|in (?:blokjes|plakjes|stukjes|reepjes|ringen|partjes|de lengte .+)|ter (?:garnering|garnituur|decoratie)|voor de garnering|(?:for|to) garnish|(?:${EN_ADV}\s+)?${EN_PREP}|cut into .+)`;
 // English preparation in front of the name: "minced garlic", "toasted sesame seeds", "boneless skinless chicken".
 const EN_LEADING_WORD = String.raw`(?:${EN_ADV}\s+)?(?:${EN_PREP.slice(3, -1)}|boneless|skinless)`;
 const PREP_LEADING = new RegExp(String.raw`^(${EN_LEADING_WORD}(?:(?:\s*,\s*|\s+and\s+|\s+)${EN_LEADING_WORD})*)\s+(.+)$`, "i");

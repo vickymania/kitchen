@@ -385,9 +385,7 @@
   },
   "review": {
     "change_translate": "{name} heet in het Engels {target}",
-    "undo_translate": "Terug: open het product, Engelse naam.",
     "change_recipe": "{name}: {linked} van {total} ingrediënten gekoppeld",
-    "undo_recipe": "Klopt iets niet? Zeg het, dan pas ik het aan.",
     "link_to": "'{name}' → {item} ({how})",
     "link_none": "'{name}': {reason}",
     "label": "Nachtcontrole",
@@ -407,10 +405,22 @@
     "change_move": "{name} verplaatst naar {target}",
     "change_alias": "{name} is nu ook een naam voor {target}",
     "change_rename": "{name} heet nu {target}",
-    "undo_merge": "Kan niet terug. Zeg het, dan maak ik het los.",
+    "change_remove": "{name} weggehaald",
     "undo_move": "Terug: product openen, Hoort bij iets anders…",
-    "undo_alias": "Terug: product openen, Andere namen, ×.",
-    "undo_rename": "Zeg het als de oude naam terug moet."
+    "undo": "Terugdraaien",
+    "undone": "Teruggedraaid",
+    "undone_toast": "{name} is teruggedraaid.",
+    "link_wrong": "Klopt niet",
+    "link_title": "Welk item is '{name}'?",
+    "link_hint": "Kies het juiste item. Het recept onthoudt het.",
+    "link_item": "Item",
+    "link_fixed": "'{name}' hoort nu bij {item}",
+    "merge_yes": "Samenvoegen",
+    "merge_no": "Apart houden",
+    "merged": "Samengevoegd",
+    "merged_into": "Samengevoegd in {target}",
+    "kept_apart": "Apart gehouden",
+    "pick_two": "Kies er minstens twee."
   },
   "prices": { "label": "Prijzen", "of": "prijzen van {day}" },
   "cooked": {
@@ -646,7 +656,7 @@
     "into": "Samenvoegen met",
     "pick": "Kies een item uit de lijst.",
     "unknown": "Geen item met die naam.",
-    "summary": "{from} wordt {into}. Typ je later {from}, dan komt het ook bij {into}. Dit kan niet terug.",
+    "summary": "{from} wordt {into}. Typ je later {from}, dan komt het ook bij {into}. Terug kan via Andere namen.",
     "do": "Samenvoegen",
     "done": "{from} zit nu in {into}.",
     "count_purchases": {"one": "1 aankoop", "other": "{n} aankopen"},
@@ -694,7 +704,7 @@
     "also": "ook: {alias}",
     "typed": "getypt: {text}",
     "title": "Andere namen",
-    "none": "Nog geen andere namen.",
+    "none": "Nog geen andere namen.", "unmerge": "terug", "unmerged": "{alias} is weer een eigen item.",
     "add": "Naam toevoegen",
     "add_title": "Andere naam voor {item}",
     "save": "Toevoegen",
@@ -703,7 +713,7 @@
     "no_match": "Niets gevonden.",
     "suggestions": "Suggesties"
   },
-  "errors": {
+  "errors": {"has_products": "Dit item heeft producten. Voeg het samen met een ander item.", "cannot_undo": "Dit kan niet meer terug.", 
     "private_mismatch": "Een privé-item gaat niet samen met een gedeeld item.",
     "name_taken": "Die naam hoort al bij iets anders.",
     "import_off": "Recepten inlezen staat nog niet aan.",
@@ -816,5 +826,5 @@
     "bottle": { "one": "fles", "other": "flessen" },
     "bowl": { "one": "bakje", "other": "bakjes" }
   },
-  "link": {"how": {"exact": "zelfde naam", "same": "zelfde product", "number": "enkelvoud of meervoud", "plain": "zonder bijwoord", "compound": "een soort ervan", "general": "algemener", "parts": "per deel"}, "reason": {"excluded": "op de nooit-voorstellen-lijst", "tap": "water uit de kraan", "tool": "hulpmiddel, geen voorraad", "several": "noemt meerdere dingen", "never": "nog geen item, nooit gekocht"}}
+  "link": {"how": {"exact": "zelfde naam", "same": "zelfde product", "number": "enkelvoud of meervoud", "plain": "zonder bijwoord", "compound": "een soort ervan", "general": "algemener", "english": "Engels woord", "person": "door jou gekozen", "parts": "per deel"}, "reason": {"excluded": "op de nooit-voorstellen-lijst", "tap": "water uit de kraan", "tool": "hulpmiddel, geen voorraad", "several": "noemt meerdere dingen", "never": "nog geen item, nooit gekocht"}}
 }

@@ -433,11 +433,15 @@ function aliasesOf(view, item) {
 function namesBlock(view, item) {
   const remove = (a) => store.dispatch({ type: "item.alias", item_id: item.id, name: a.name, remove: true })
     .then(() => toast(t("names.removed", { alias: a.name, name: item.name }))).catch(refused);
+  const unmerge = (a) => store.dispatch({ type: "item.unmerge", item_id: a.id.slice(3), on: new Date().toLocaleDateString("sv-SE") })
+    .then(() => toast(t("names.unmerged", { alias: a.name }))).catch(refused);
   const list = aliasesOf(view, item);
   return [
     h("div", { class: "section-head" }, h("h2", {}, t("names.title"))),
     list.length
       ? h("div", { class: "names" }, list.map((a) => h("span", { class: "name-chip" }, a.name,
+        // A name merged into this item (alias "ma-<item id>"): its merge undone, rows and all (item.unmerge).
+        a.id.startsWith("ma-") ? h("button", { type: "button", class: "mono", onclick: () => unmerge(a) }, t("names.unmerge")) : null,
         h("button", { type: "button", "aria-label": t("names.remove", { alias: a.name }), onclick: () => remove(a) }, "×"))))
       : h("p", { class: "hint" }, t("names.none")),
     h("div", { class: "actions" }, h("button", { type: "button", class: "btn ghost", onclick: () => addNameSheet(item) }, t("names.add"))),

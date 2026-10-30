@@ -288,7 +288,7 @@ test("nightlyFixes: the tool's op ids, renames before merges, new DOUBT groups a
   assert.equal(merge.op_id, tool.mergeOpId(merge.from_item_id, merge.into_item_id), "a later --write is a replay");
   assert.deepEqual(first.decide, [], "the first run asks nothing: the old groups wait on the backlog");
   const second = nightlyFixes(sync, { today: DAY, seen: [] });
-  assert.deepEqual(second.decide, ["Nootmuskaat en Gemalen nootmuskaat samenvoegen?"]);
+  assert.deepEqual(second.decide.map((d) => d.text), ["Nootmuskaat en Gemalen nootmuskaat samenvoegen?"], "with Samenvoegen / Apart houden (tests/nightly-v2.test.mjs)");
   assert.deepEqual(nightlyFixes(sync, { today: DAY, seen: second.seen }).decide, [], "asked once");
 });
 

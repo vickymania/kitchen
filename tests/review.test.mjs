@@ -24,6 +24,7 @@ import { localToday } from "../public/shared/intervals.js";
 import { newPurchasesText, NEW_PURCHASES_FILE } from "../tools/import_ah.mjs";
 import {
   prepare, save, readReport, logTail, lastRunLog, amsterdamDay, logErrors, buildPrompt, mcpConfig, reportText, reviewOp, failureLines, LOG_LINES,
+  markShownChecked, CHECKED_FILE, SHOWN_FILE,
 } from "../fetcher/review.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -489,4 +490,47 @@ test("kitchen_recent_purchases: 1500 items stay under the cap, still with the ri
     client.close();
     live.close();
   }
+});
+
+test("kitchen_recent_purchases on the nightly check: what the cap leaves out waits for the next night, never twice, never reported", async () => {
+  const live = await liveWorker();
+  const dir = tmp("carry");
+  const tokenFile = path.join(dir, "reviewer-token");
+  fs.writeFileSync(tokenFile, `${live.reviewer}\n`);
+  const checkedFile = path.join(dir, CHECKED_FILE);
+  const shownFile = path.join(dir, SHOWN_FILE);
+  fs.writeFileSync(checkedFile, "[]");
+  const env = { KITCHEN_ORIGIN: live.origin, KITCHEN_TOKEN_FILE: tokenFile, KITCHEN_CHECKED_FILE: checkedFile, KITCHEN_SHOWN_FILE: shownFile };
+  const send = async (ops) => assert.equal((await fetch(`${live.origin}/api/ops`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${live.thomas}` }, body: JSON.stringify({ ops }),
+  })).status, 200);
+  await send(Array.from({ length: 20 }, (_, i) => purchase(`pur-carry-${i}`, `Zzcarry ${i} ${"x".repeat(80)}`,
+    { id: `ah-product-carry-${i}`, name: `Zzcarry product ${i} ${"y".repeat(60)}`, brand: "AH", size: "1 kg" })));
+  const seen = new Set();
+  let nights = 0;
+  try {
+  for (let night = 0; night < 10; night++) {
+    nights++;
+    const client = mcp(env);
+    try {
+      const recent = await client.tool("kitchen_recent_purchases", { days: 2 });
+      assert.equal(recent.error, false, recent.text);
+      assert.ok(!/cut off|not shown/.test(recent.text), "never a cut-off note to report");
+      const ids = [...recent.text.matchAll(/\[product: (ah-product-carry-\d+)\]/g)].map((m) => m[1]);
+      for (const id of ids) {
+        assert.ok(!seen.has(id), `${id} shown twice`);
+        seen.add(id);
+      }
+      if (/wait for the next night/.test(recent.text)) assert.ok(ids.length > 0);
+    } finally {
+      client.close();
+    }
+    markShownChecked(dir);
+    if (seen.size === 20) break;
+  }
+  } finally {
+    live.close();
+  }
+  assert.equal(seen.size, 20, "every purchase was shown once, over a few nights");
+  assert.ok(nights > 1, "the cap left some for a later night");
 });

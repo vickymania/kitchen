@@ -47,7 +47,7 @@ import { fileURLToPath } from "node:url";
 import { applyOp, emptyState, KINDS, OpError } from "../public/shared/ops.js";
 import { nameKey } from "../public/shared/ingredients.js";
 import { localToday } from "../public/shared/intervals.js";
-import { familyMembers, planGroups } from "../public/shared/dedupe.js";
+import { familyMembers, planGroups, decisionSets } from "../public/shared/dedupe.js";
 import { stableId } from "./import_todo.mjs";
 import { pushOps, readToken } from "./import_ah.mjs";
 
@@ -157,7 +157,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const res = await fetch(`${origin}/api/sync`, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`/api/sync: ${res.status}`);
   const data = stateOf(await res.json());
-  const groups = planGroups(data, { targets, excludes });
+  // Names the household keeps apart (item_decisions) are never grouped.
+  const groups = planGroups(data, { targets, excludes, apart: decisionSets(data.decisions).apart });
   const known = new Set(Object.values(groups.facts).map((f) => nameKey(f.item.name)));
   const unknown = [...targets, ...excludes].filter((n) => !known.has(nameKey(n)));
   if (unknown.length) console.log(`Note: no live item named ${unknown.map((n) => `"${n}"`).join(", ")} (merged already?).`);

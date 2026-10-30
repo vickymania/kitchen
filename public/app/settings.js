@@ -226,7 +226,7 @@ export function mountSettings(root) {
   const changes = h("div", { class: "review-part" });
   const renderReview = (view) => {
     const r = latestReview(view);
-    review.replaceChildren(...(r ? [h("p", { class: "mono mute" }, formatDate(r.day)), ...reviewBody(r).filter(Boolean)] : [h("p", { class: "hint" }, t("review.none"))]));
+    review.replaceChildren(...(r ? [h("p", { class: "mono mute" }, formatDate(r.day)), ...reviewBody(r, view).filter(Boolean)] : [h("p", { class: "hint" }, t("review.none"))]));
     changes.replaceChildren(h("h3", { class: "low-label mono" }, t("review.changes")), changesList(view));
   };
 

@@ -35,7 +35,8 @@ import { pairDevice } from "./fetch.mjs";
 import { NEW_PURCHASES_FILE } from "../tools/import_ah.mjs";
 import { localToday } from "../public/shared/intervals.js";
 import { REVIEW_MAX_LINES, REVIEW_LINE_MAX } from "../public/shared/ops.js";
-import { planGroups, nightlyPlan, familyMembers, NIGHTLY_MERGE_MAX, NIGHTLY_RENAME_MAX } from "../public/shared/dedupe.js";
+import { planGroups, nightlyPlan, familyMembers, decisionSets, NIGHTLY_MERGE_MAX, NIGHTLY_RENAME_MAX, NIGHTLY_REMOVE_MAX } from "../public/shared/dedupe.js";
+import { keepFixed } from "../public/shared/ops.js";
 import { householdDefaults, mergeOpId, stateOf } from "../tools/dedupe_items.mjs";
 import { stableId } from "../tools/import_todo.mjs";
 import { linkRecipe, linksStale } from "../public/shared/recipe-links.js";
@@ -123,7 +124,33 @@ export function newPurchases(home = HOME, now = Date.now()) {
     parts.push(fs.readFileSync(file, "utf8").trim());
   }
   const text = parts.join("\n\n");
-  return text.length > PURCHASE_CHARS ? `${text.slice(0, PURCHASE_CHARS)}\n(cut off)` : text;
+  return text.length > PURCHASE_CHARS ? `${text.slice(0, PURCHASE_CHARS)}\n(more lines wait for the next night)` : text;
+}
+
+/* ------------------------------- purchases carried over to the next night */
+
+/**
+ * The purchase ids the check has seen (review-state/checked-purchases.json)
+ * and the ones kitchen_recent_purchases showed tonight (shown-purchases.json,
+ * written by mcp/server.mjs through KITCHEN_SHOWN_FILE). Thomas, 30-10-2026:
+ * "22 aankopen zijn niet gecontroleerd — wat moet ik daarmee?": a purchase
+ * the capped output left out is shown the next night, never reported.
+ */
+export const CHECKED_FILE = "checked-purchases.json";
+export const SHOWN_FILE = "shown-purchases.json";
+/** At most this many checked ids are kept (the oldest go first). */
+export const CHECKED_MAX = 20_000;
+
+/** Tonight's shown ids added to the checked ones; the shown file is cleared. */
+export function markShownChecked(stateDir = STATE_DIR) {
+  const shownFile = path.join(stateDir, SHOWN_FILE);
+  const shown = readJson(shownFile, []);
+  const checkedFile = path.join(stateDir, CHECKED_FILE);
+  const had = readJson(checkedFile, []);
+  const all = [...new Set([...had, ...(Array.isArray(shown) ? shown : [])])].slice(-CHECKED_MAX);
+  fs.writeFileSync(checkedFile, JSON.stringify(all));
+  fs.rmSync(shownFile, { force: true });
+  return { checked: all.length, added: all.length - had.length };
 }
 
 /** The prompt: fetcher/review-prompt.md with today, the log tail, the new purchases and tonight's own fixes filled in. */
@@ -136,14 +163,17 @@ export function buildPrompt({ template, today, log: tail, purchases, household =
     .replace("{{PURCHASES}}", ["```", purchases || "(none)", "```"].join("\n"));
 }
 
-/** The MCP config for claude: only the kitchen server, with the reviewer's token file. */
-export function mcpConfig(home = HOME, origin = ORIGIN) {
+/** The MCP config for claude: only the kitchen server, with the reviewer's token file and the checked-purchases files. */
+export function mcpConfig(home = HOME, origin = ORIGIN, stateDir = path.join(home, "review-state")) {
   return {
     mcpServers: {
       kitchen: {
         command: process.execPath,
         args: [path.join(home, "mcp", "server.mjs")],
-        env: { KITCHEN_TOKEN_FILE: path.join(home, "reviewer-token"), KITCHEN_ORIGIN: origin },
+        env: {
+          KITCHEN_TOKEN_FILE: path.join(home, "reviewer-token"), KITCHEN_ORIGIN: origin,
+          KITCHEN_CHECKED_FILE: path.join(stateDir, CHECKED_FILE), KITCHEN_SHOWN_FILE: path.join(stateDir, SHOWN_FILE),
+        },
       },
     },
   };
@@ -179,7 +209,8 @@ export function recipeLinkOps(data, { max = RECIPE_LINK_MAX } = {}) {
     .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)) || a.id.localeCompare(b.id));
   for (const r of recipes) {
     if (ops.length >= max) break;
-    const lines = linkRecipe(r, data);
+    // A line the household fixed ("Klopt niet", recipe.link_fix) stays as they said.
+    const lines = keepFixed(linkRecipe(r, data), r.ingredient_links?.fixed);
     if (!lines.length || !linksStale(r, lines)) continue;
     const hash = createHash("sha256").update(JSON.stringify([r.id, r.updated_at, lines])).digest("hex").slice(0, 24);
     ops.push({ op_id: `op-rl-${hash}`, type: "recipe.links", recipe_id: r.id, at: r.updated_at ?? null, lines, note: r.title });
@@ -199,25 +230,36 @@ const nameList = (names) => (names.length > 1 ? `${names.slice(0, -1).join(", ")
  * DOUBT_MAX. `seen` null is the first run: every group there is now is
  * recorded, none asked (the old ones wait on the backlog already).
  */
-export function nightlyFixes(sync, { targets = [], excludes = [], today = localToday(), seen = null, max = NIGHTLY_MERGE_MAX, maxRenames = NIGHTLY_RENAME_MAX } = {}) {
+export function nightlyFixes(sync, { targets = [], excludes = [], today = localToday(), seen = null, max = NIGHTLY_MERGE_MAX, maxRenames = NIGHTLY_RENAME_MAX,
+  maxRemoves = NIGHTLY_REMOVE_MAX } = {}) {
   const data = stateOf(sync);
-  const groups = planGroups(data, { targets, excludes });
-  const plan = nightlyPlan(groups, { max, maxRenames });
+  // What the household decided (Apart houden, an undone change): never done or asked again.
+  const decisions = decisionSets(data.decisions);
+  const groups = planGroups(data, { targets, excludes, apart: decisions.apart });
+  const plan = nightlyPlan(groups, { max, maxRenames, maxRemoves, decisions });
   const name = (id) => groups.facts[id]?.item.name ?? data.items[id]?.name ?? id;
   const ops = [
     ...plan.renames.map((r) => ({ op_id: stableId("op", `nightly_rename:${r.id}:${r.name}`), type: "item.rename", item_id: r.id, name: r.name, note: `${r.was} -> ${r.name}` })),
     ...plan.merges.map((m) => ({ op_id: mergeOpId(m.from, m.into), type: "item.merge", from_item_id: m.from, into_item_id: m.into, on: today, note: `${name(m.from)} -> ${name(m.into)}` })),
+    // Junk names that mean nothing (30-10-2026: "weg ermee"): removed, never renamed.
+    ...plan.removes.map((r) => ({ op_id: stableId("op", `nightly_remove:${r.id}`), type: "item.remove", item_id: r.id, on: today, reason: r.reason, note: `${name(r.id)} weg (${r.reason})` })),
   ];
+  // Every question gets "Samenvoegen" / "Apart houden" in the app: the item ids, the clean target first.
   const asks = [
     ...groups.doubt.map((f) => {
-      const names = [name(f.target), ...familyMembers(f).map(name).sort((a, b) => a.localeCompare(b, "nl"))];
-      return { key: `doubt:${[...names].sort().join("|")}`, text: `${nameList(names)} samenvoegen?` };
+      const ids = [f.target, ...familyMembers(f).sort((a, b) => name(a).localeCompare(name(b), "nl"))];
+      const names = ids.map(name);
+      return { key: `doubt:${[...names].sort().join("|")}`, text: `${nameList(names)} samenvoegen?`, ids, into: f.target };
     }),
-    ...plan.held.map((h) => ({ key: `held:${name(h.from)}>${name(h.into)}`, text: `${name(h.from)} samenvoegen met ${name(h.into)}?` })),
+    ...plan.held.map((h) => ({ key: `held:${name(h.from)}>${name(h.into)}`, text: `${name(h.from)} samenvoegen met ${name(h.into)}?`, ids: [h.into, h.from], into: h.into })),
+    ...plan.junkAsks.map((j) => ({ key: `junk:${name(j.from)}>${name(j.into)}`, text: `${name(j.from)} samenvoegen met ${name(j.into)}?`, ids: [j.into, j.from], into: j.into })),
   ];
   const known = new Set(seen ?? asks.map((a) => a.key));
   const fresh = asks.filter((a) => !known.has(a.key)).slice(0, DOUBT_MAX);
-  return { ops, decide: fresh.map((a) => a.text), seen: [...new Set([...known, ...fresh.map((a) => a.key)])], left: plan.left };
+  return {
+    ops, decide: fresh.map(({ text, ids, into }) => ({ text, ids, into })),
+    seen: [...new Set([...known, ...fresh.map((a) => a.key)])], left: plan.left,
+  };
 }
 
 function readJson(file, fallback) {
@@ -255,8 +297,10 @@ export async function runNightlyFixes({ home = HOME, stateDir = STATE_DIR, today
         body: JSON.stringify({ ops: [sent] }),
       });
       const body = await r.json().catch(() => ({}));
-      if (r.status === 429) { say("merge cap reached"); break; }
+      // The day's cap: the rest waits for the next night, nobody needs to hear it.
+      if (r.status === 429) { say(`${sent.type} cap reached`); continue; }
       if (r.ok && body.results?.[0]?.ok) out.done.push(note);
+      else if (r.status === 403) say("refused", note);
       else out.errors.push(`Nachtcontrole kon niet aanpassen: ${note.replace(" -> ", " naar ")}.`);
     }
     fs.writeFileSync(seenFile, JSON.stringify(fixes.seen, null, 1));
@@ -315,7 +359,9 @@ export function prepare({ home = HOME, stateDir = STATE_DIR, today = localToday(
     // none: the general rules only
   }
   fs.writeFileSync(path.join(stateDir, "prompt.txt"), buildPrompt({ template, today, log: lastRunLog(logText, today), purchases: newPurchases(home, now), household, fixes: fixesText(fixes) }));
-  fs.writeFileSync(path.join(stateDir, "mcp.json"), JSON.stringify(mcpConfig(home), null, 2));
+  fs.writeFileSync(path.join(stateDir, "mcp.json"), JSON.stringify(mcpConfig(home, ORIGIN, stateDir), null, 2));
+  // A shown file left by a run that never saved: those purchases were not judged, show them again.
+  fs.rmSync(path.join(stateDir, SHOWN_FILE), { force: true });
   return true;
 }
 
@@ -334,6 +380,25 @@ function jsonIn(text) {
 
 const clip = (v) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, REVIEW_LINE_MAX);
 const list = (v) => (Array.isArray(v) ? v.map(clip).filter(Boolean).slice(0, REVIEW_MAX_LINES) : []);
+const ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * One question of the report: a line, or a merge question { text, names }
+ * (Claude's: the items by name) or { text, ids, into } (the rules'), which
+ * the app answers with "Samenvoegen" / "Apart houden".
+ */
+export function decideLine(v) {
+  if (typeof v === "string") return clip(v);
+  if (!v || typeof v !== "object") return "";
+  const text = clip(v.text);
+  if (!text) return "";
+  const ids = Array.isArray(v.ids) ? v.ids.filter((x) => typeof x === "string" && ID.test(x)).slice(0, 12) : [];
+  const names = Array.isArray(v.names ?? v.merge) ? (v.names ?? v.merge).map((n) => clip(n).slice(0, 120)).filter(Boolean).slice(0, 12) : [];
+  if (ids.length > 1) return { text, ids, ...(typeof v.into === "string" && ID.test(v.into) ? { into: v.into } : {}) };
+  if (names.length > 1) return { text, names };
+  return text;
+}
+const decideList = (v) => (Array.isArray(v) ? v.map(decideLine).filter(Boolean).slice(0, REVIEW_MAX_LINES) : []);
 
 /** Claude Code's own words when its login is gone (expired or revoked): "Please run /login", "OAuth token has expired"... */
 export const AUTH_FAILED = /\/login\b|not logged in|log in again|invalid api key|oauth token|authentication_error|unauthori[sz]ed|\b401\b/i;
@@ -377,7 +442,7 @@ export function readReport(raw, { exitCode = 0, tail = "", stderr = "", ssh = SS
     const fixed = (Array.isArray(answer.fixed) ? answer.fixed : [])
       .map((f) => ({ text: clip(f?.text), undo: clip(f?.undo) })).filter((f) => f.text).slice(0, REVIEW_MAX_LINES);
     const errors = list(answer.errors);
-    return { ok: true, failure: null, meta, report: { run_ok: answer.run_ok !== false && !errors.length, errors, fixed, decide: list(answer.decide) } };
+    return { ok: true, failure: null, meta, report: { run_ok: answer.run_ok !== false && !errors.length, errors, fixed, decide: decideList(answer.decide) } };
   }
   // No usable answer: why, and the run's own errors by rule.
   const said = `${out?.result ?? ""}\n${stderr ?? ""}`;
@@ -399,7 +464,7 @@ export function reportText(day, report) {
     report.errors.length ? "Run: fouten" : "Run: goed",
     ...report.errors.map((e) => `- ${e}`),
     ...(report.fixed.length ? ["Opgelost:", ...report.fixed.map((f) => `- ${f.text}${f.undo ? ` (${f.undo})` : ""}`)] : []),
-    ...(report.decide.length ? ["Beslissen:", ...report.decide.map((d) => `- ${d}`)] : []),
+    ...(report.decide.length ? ["Beslissen:", ...report.decide.map((d) => `- ${typeof d === "string" ? d : d.text}`)] : []),
   ].join("\n");
 }
 
@@ -452,10 +517,13 @@ export async function save({ exitCode = 0, home = HOME, stateDir = STATE_DIR, to
   // Tonight's own fixes (runNightlyFixes): their questions and refusals go first.
   const fixes = readJson(path.join(stateDir, FIXES_FILE), null);
   if (fixes?.day === today) {
-    report.decide = [...(fixes.decide ?? []).map(clip), ...report.decide].filter(Boolean).slice(0, REVIEW_MAX_LINES);
+    report.decide = [...(fixes.decide ?? []).map(decideLine), ...report.decide].filter(Boolean).slice(0, REVIEW_MAX_LINES);
     report.errors = [...(fixes.errors ?? []).map(clip), ...report.errors].filter(Boolean).slice(0, REVIEW_MAX_LINES);
     if (report.errors.length) report.run_ok = false;
   }
+  // What kitchen_recent_purchases showed tonight is checked; the rest comes the next night.
+  const carried = markShownChecked(stateDir);
+  say(`purchases checked: ${carried.added} tonight, ${carried.checked} in all`);
   fs.writeFileSync(path.join(stateDir, "last.json"), JSON.stringify({ day: today, exit: exitCode, failure, ...meta, ...report }, null, 2));
   fs.writeFileSync(path.join(stateDir, "last.txt"), `${reportText(today, report)}\n`);
   say(`claude exit ${exitCode}, ${ok ? "report" : `no report (${failure})`}; turns ${meta.turns ?? "?"}, cost $${meta.cost_usd?.toFixed(3) ?? "?"}; `

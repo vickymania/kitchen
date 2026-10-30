@@ -1,7 +1,7 @@
 // D1 side of the op engine: load the rows an op needs, run public/shared/ops.js
 // on them, and write back what changed in one atomic batch, together with the
 // household's new change counter. Also serves the "what changed since N" pull.
-import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, findItem, aliasTarget, AUTO_CHANGES_DAYS } from "../public/shared/ops.js";
+import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, findItem, aliasTarget, AUTO_CHANGES_DAYS, apartPair, decisionId } from "../public/shared/ops.js";
 import { nameKey } from "../public/shared/ingredients.js";
 import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pendingEventId } from "../public/shared/pantry.js";
 import { addDays } from "../public/shared/shelf-life.js";
@@ -15,12 +15,12 @@ const TABLE = {
   products: "products", ratings: "ratings", purchases: "purchases", receipts: "receipts", cooks: "cooks",
   offers: "offers", preferences: "preferences", pantry: "pantry", pantry_events: "pantry_events",
   deal_rules: "deal_rules", pending_takes: "pending_takes", cook_prompts: "cook_prompts", recipe_ratings: "recipe_ratings", aliases: "item_aliases", store_prices: "store_prices",
-  reviews: "reviews", auto_changes: "auto_changes",
+  reviews: "reviews", auto_changes: "auto_changes", decisions: "item_decisions",
 };
 const JSON_FIELDS = {
-  recipes: ["ingredients", "steps", "nutrition", "meals", "ingredient_links", "translation"], entries: ["amounts", "sources"], items: [], members: [],
+  recipes: ["ingredients", "steps", "nutrition", "meals", "ingredient_links", "translation"], entries: ["amounts", "sources"], items: ["undo_rows"], members: [],
   products: [], ratings: [], purchases: [], receipts: ["lines"], cooks: [], offers: [], preferences: [], pantry: [], pantry_events: ["rate_before"], deal_rules: ["match_words", "require_words", "exclude_words"],
-  pending_takes: [], cook_prompts: ["entry_ids"], recipe_ratings: [], aliases: [], store_prices: [], reviews: ["fixed", "decide", "errors"], auto_changes: ["lines"],
+  pending_takes: [], cook_prompts: ["entry_ids"], recipe_ratings: [], aliases: [], store_prices: [], reviews: ["fixed", "decide", "errors"], auto_changes: ["lines", "undo"], decisions: [],
 };
 
 // The columns an op may write. Members only change name and language through
@@ -33,7 +33,7 @@ const COLUMNS = {
     "created_at", "updated_at", "deleted_at"],
   items: ["id", "name", "name_key", "preferred_product_id", "again", "low_at", "low_off", "not_yet_until",
     "shelf_days", "opened_days", "shelf_source", "use_per_day", "rate_source", "rate_samples", "merged_into", "private_to", "created_at", "deleted_at",
-    "name_en", "name_en_key", "name_en_source"],
+    "name_en", "name_en_key", "name_en_source", "undo_rows"],
   products: ["id", "item_id", "name", "brand", "size", "store", "store_only", "category", "kind", "last_price_cents", "product_key",
     "shelf_days", "opened_days", "shelf_source", "created_at", "updated_at", "deleted_at"],
   ratings: ["id", "member_id", "product_id", "stars", "note", "created_at", "updated_at", "deleted_at"],
@@ -55,12 +55,13 @@ const COLUMNS = {
   aliases: ["id", "item_id", "name", "name_key", "created_by", "created_at", "updated_at", "deleted_at"],
   store_prices: ["id", "product_id", "store", "name", "size", "price_cents", "price_on", "created_at", "updated_at", "deleted_at"],
   reviews: ["id", "day", "run_ok", "fixed", "decide", "errors", "turns", "cost_cents", "created_at", "updated_at", "deleted_at"],
-  auto_changes: ["id", "day", "what", "name", "target", "item_id", "product_id", "reason", "lines", "created_at", "updated_at", "deleted_at"],
+  auto_changes: ["id", "day", "what", "name", "target", "item_id", "product_id", "reason", "lines", "created_at", "updated_at", "deleted_at", "undo", "undone_at"],
+  decisions: ["id", "kind", "a", "b", "a_name", "b_name", "created_by", "created_at", "updated_at", "deleted_at"],
 };
 
 // Synced to the phones (pull), in this order. Offers are written by
 // worker/offers.js, never by an op.
-const SYNCED = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes"];
+const SYNCED = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes", "decisions"];
 
 // What a recipes-only person (members.recipes_only) pulls: the book, the
 // stars, and the people's names for them. Never the list, the pantry, the
@@ -214,10 +215,129 @@ async function loadCountedDown(db, hh, s) {
   for (const itemId of itemIds) await loadInto(db, hh, s, "pantry", "item_id = ? AND deleted_at IS NULL", itemId);
 }
 
+/** Rows of `kind` by a list of ids of any length (a merge's record), in chunks SQLite takes. */
+async function loadAllIds(db, hh, s, kind, ids) {
+  const list = [...new Set((ids ?? []).filter((x) => typeof x === "string"))];
+  for (let i = 0; i < list.length; i += 90) {
+    const chunk = list.slice(i, i + 90);
+    await loadInto(db, hh, s, kind, `id IN (${chunk.map(() => "?").join(",")})`, ...chunk);
+  }
+}
+
+/** The decision rows an op may write (public/shared/ops.js putDecision): by their deterministic ids. */
+async function loadDecisions(db, hh, s, pairs) {
+  await loadIds(db, hh, s, "decisions", pairs.map(([kind, a, b]) => {
+    const [x, y] = kind === "apart" ? apartPair(a, b) : [String(a ?? ""), String(b ?? "")];
+    return decisionId(kind, x, y);
+  }));
+}
+
+/**
+ * item.unmerge: the merged-away item, the item it went into (and where that
+ * went), every row its record (undo_rows) names, the lines it was folded
+ * into, the scoped rows on into it revived, its aliases, and the live
+ * pantry rows of into (settled first).
+ */
+async function loadUnmerge(db, hh, s, fromId) {
+  await loadItems(db, hh, s, "id = ?", fromId);
+  const from = s.items[fromId];
+  if (!from?.deleted_at || !from.merged_into) return;
+  const rec = from.undo_rows?.kind === "merge" ? from.undo_rows : null;
+  await loadItems(db, hh, s, "id = ?", rec?.into ?? from.merged_into);
+  const holder = aliasTarget(s.items, s.items[rec?.into ?? from.merged_into]);
+  for (const [kind, ids] of Object.entries(rec?.rows ?? {})) if (TABLE[kind]) await loadAllIds(db, hh, s, kind, ids);
+  await loadAllIds(db, hh, s, "entries", (rec?.folded ?? []).flatMap((f) => [f.id, f.into_id]));
+  for (const kind of ["preferences", "deal_rules"]) {
+    const sc = (rec?.scoped ?? []).filter((x) => x.kind === kind);
+    await loadAllIds(db, hh, s, kind, sc.flatMap((x) => [x.id, x.into_id]));
+  }
+  await loadAllIds(db, hh, s, "aliases", [...(rec?.aliases ?? []), rec?.alias?.id, `ma-${fromId}`]);
+  await loadInto(db, hh, s, "aliases", "name_key = ?", from.name_key);
+  if (holder) {
+    await loadInto(db, hh, s, "pantry", "item_id = ? AND deleted_at IS NULL", holder.id);
+    await loadDecisions(db, hh, s, [["apart", from.name, holder.name]]);
+  }
+}
+
+/** item.unremove: the item, every row its record names, its open list line by now. */
+async function loadUnremove(db, hh, s, itemId) {
+  await loadInto(db, hh, s, "items", "id = ?", itemId);
+  const item = s.items[itemId];
+  if (!item) return;
+  for (const [kind, ids] of Object.entries(item.undo_rows?.kind === "remove" ? item.undo_rows.rows ?? {} : {})) {
+    if (TABLE[kind]) await loadAllIds(db, hh, s, kind, ids);
+  }
+  await loadInto(db, hh, s, "entries", "item_id = ? AND checked_at IS NULL AND deleted_at IS NULL", itemId);
+  await loadDecisions(db, hh, s, [["keep", itemId, ""]]);
+}
+
+/** Rows of another load into this one (change.undo runs another op's handler). */
+function addState(s, other) {
+  for (const kind of Object.keys(other)) Object.assign(s[kind] ??= {}, other[kind]);
+}
+
 /** Exactly the rows this op can read or change, nothing more. */
 async function load(db, hh, op, memberId) {
   const s = emptyState();
   switch (op.type) {
+    case "item.unmerge":
+      await loadUnmerge(db, hh, s, String(op.item_id));
+      break;
+    case "item.remove": {
+      const itemId = String(op.item_id);
+      await loadInto(db, hh, s, "items", "id = ?", itemId);
+      // Every live row it buries (a junk name: a handful), and one product is enough to refuse.
+      for (const kind of ["entries", "aliases", "pantry", "purchases", "preferences", "deal_rules", "pending_takes"]) {
+        await loadInto(db, hh, s, kind, "item_id = ? AND deleted_at IS NULL", itemId);
+      }
+      await loadInto(db, hh, s, "products", "item_id = ? AND deleted_at IS NULL LIMIT 1", itemId);
+      break;
+    }
+    case "item.unremove":
+      await loadUnremove(db, hh, s, String(op.item_id));
+      break;
+    case "item.apart": {
+      const names = Array.isArray(op.names) ? op.names.slice(0, 12).map((n) => String(n ?? "")) : [];
+      const pairs = [];
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) pairs.push(["apart", names[i], names[j]]);
+      await loadDecisions(db, hh, s, pairs);
+      break;
+    }
+    case "recipe.link_fix":
+      await loadInto(db, hh, s, "recipes", "id = ?", String(op.recipe_id));
+      await loadItems(db, hh, s, "id = ?", String(op.item_id));
+      break;
+    case "change.undo": {
+      await loadInto(db, hh, s, "auto_changes", "id = ?", String(op.change_id));
+      const c = s.auto_changes[op.change_id];
+      if (!c || c.deleted_at || c.undone_at) break;
+      const u = c.undo ?? {};
+      const on = opDay(op);
+      if (c.what === "merge") {
+        let fromId = u.from_item_id;
+        if (!fromId) {
+          // A line from before 30-10-2026: the merged name's tombstone.
+          await loadItems(db, hh, s, "name_key = ? AND deleted_at IS NOT NULL AND merged_into IS NOT NULL", nameKey(c.name));
+          fromId = Object.values(s.items).find((i) => i.deleted_at && i.merged_into && i.name_key === nameKey(c.name))?.id;
+        }
+        if (fromId) addState(s, await load(db, hh, { type: "item.unmerge", item_id: fromId, on }, memberId));
+      } else if (c.what === "move" && u.from_item_id && c.product_id) {
+        addState(s, await load(db, hh, { type: "product.move", product_id: c.product_id, item_id: u.from_item_id, on }, memberId));
+        await loadDecisions(db, hh, s, [["no_move", c.product_id, c.item_id ?? ""]]);
+      } else if (c.what === "alias") {
+        addState(s, await load(db, hh, { type: "item.alias", item_id: String(c.item_id), name: c.name, remove: true }, memberId));
+        await loadDecisions(db, hh, s, [["no_alias", nameKey(c.name), c.item_id ?? ""]]);
+      } else if (c.what === "rename") {
+        await loadInto(db, hh, s, "items", "id = ?", String(c.item_id));
+        await loadDecisions(db, hh, s, [["no_rename", c.item_id ?? "", ""]]);
+      } else if (c.what === "remove") {
+        await loadUnremove(db, hh, s, String(u.item_id ?? c.item_id));
+      } else if (c.what === "translate") {
+        await loadInto(db, hh, s, "items", "id = ?", String(c.item_id));
+        await loadDecisions(db, hh, s, [["no_translate", c.item_id ?? "", nameKey(c.target ?? "")]]);
+      }
+      break;
+    }
     case "product.put":
       await loadProduct(db, hh, s, op.id, op.product);
       if (typeof op.product?.item_id === "string") await loadInto(db, hh, s, "items", "id = ?", op.product.item_id);
@@ -741,6 +861,8 @@ export async function pull(db, hh, since, { guest = false, memberId = null } = {
       });
     }
   }
+  // A merge's or removal's record stays on the server: no phone needs it.
+  if (out.items) out.items = out.items.map(({ undo_rows, ...i }) => i);
   if (guest) out.members = out.members.map((m) => Object.fromEntries(GUEST_MEMBER_FIELDS.map((f) => [f, m[f] ?? null])));
   // Which item each recipe line means is the household's (30-10-2026): never a guest's.
   if (guest) out.recipes = out.recipes.map(({ ingredient_links, ...r }) => r);

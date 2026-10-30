@@ -15,7 +15,8 @@ import { translateRecipes } from "./translate.js";
 import { syncOffers } from "./offers.js";
 import { parseListInput } from "../public/shared/ingredients.js";
 import { isExcluded, isExcludedLookalike } from "../public/shared/excluded.js";
-import { mergeProblem, NIGHTLY_MERGE_MAX } from "../public/shared/dedupe.js";
+import { mergeProblem, junkItem, apartKey, NIGHTLY_MERGE_MAX, NIGHTLY_REMOVE_MAX } from "../public/shared/dedupe.js";
+import { nameKey } from "../public/shared/ingredients.js";
 import { takeSome } from "./claude.js";
 import { widgetList, widgetNames } from "./widget.js";
 
@@ -268,24 +269,44 @@ async function reviewerTouchesExcluded(env, who, list) {
  * answers it. Returns the reason, or null.
  */
 async function reviewerMergeRefused(env, who, list) {
+  const factsOf = async (id) => {
+    const item = await env.DB.prepare("SELECT id, name, use_per_day, rate_source, private_to, deleted_at FROM items WHERE household_id = ? AND id = ?")
+      .bind(who.householdId, id).first();
+    if (!item) return null;
+    const count = async (table) => (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE household_id = ? AND item_id = ? AND deleted_at IS NULL`)
+      .bind(who.householdId, id).first())?.n ?? 0;
+    return {
+      item, bought: await count("purchases"), rules: await count("deal_rules"), products: await count("products"),
+      rate: item.use_per_day !== null && (item.rate_source === "person" || item.rate_source === "learned"),
+    };
+  };
   for (const op of list) {
     if (op.type === "item.rename") {
       const item = await env.DB.prepare("SELECT name FROM items WHERE household_id = ? AND id = ?").bind(who.householdId, op.item_id).first();
       if (item && (isExcluded(item.name) || isExcludedLookalike(item.name))) return "excluded";
       continue;
     }
+    if (op.type === "item.translate") {
+      // Never an item private to the reviewer's own member (another member's does not exist for it: not_found, per op).
+      const item = await env.DB.prepare("SELECT private_to FROM items WHERE household_id = ? AND id = ?").bind(who.householdId, op.item_id).first();
+      if (item?.private_to && item.private_to === who.memberId) return "private";
+      continue;
+    }
+    if (op.type === "item.remove") {
+      // Only what the junk rule flags: a vague or shouted name that was never bought as a product (never a private item).
+      const f = await factsOf(op.item_id);
+      if (!f) return "not_found";
+      if (f.item.deleted_at) continue;
+      // Another member's private item does not exist for the reviewer: the engine answers not_found.
+      if (f.item.private_to && f.item.private_to !== who.memberId) continue;
+      if (!junkItem(f)) return "not_junk";
+      continue;
+    }
     if (op.type !== "item.merge") continue;
     const facts = {};
     for (const id of [op.from_item_id, op.into_item_id]) {
-      const item = await env.DB.prepare("SELECT id, name, use_per_day, rate_source, private_to, deleted_at FROM items WHERE household_id = ? AND id = ?")
-        .bind(who.householdId, id).first();
-      if (!item) return "not_found";
-      const count = async (table) => (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE household_id = ? AND item_id = ? AND deleted_at IS NULL`)
-        .bind(who.householdId, id).first())?.n ?? 0;
-      facts[id] = {
-        item, bought: await count("purchases"), rules: await count("deal_rules"),
-        rate: item.use_per_day !== null && (item.rate_source === "person" || item.rate_source === "learned"),
-      };
+      facts[id] = await factsOf(id);
+      if (!facts[id]) return "not_found";
     }
     const from = facts[op.from_item_id], into = facts[op.into_item_id];
     if (into.item.deleted_at) return "into_gone";
@@ -296,19 +317,54 @@ async function reviewerMergeRefused(env, who, list) {
   return null;
 }
 
+/**
+ * What the household decided (item_decisions; Thomas, 30-10-2026: an undone
+ * change is never done again, "Apart houden" is never merged): a merge of two
+ * names kept apart, an alias, a product move or a rename it undid, a removal
+ * it undid (keep). Returns the kind that refuses, or null.
+ */
+async function reviewerDecided(env, who, list) {
+  const has = async (kind, a, b = "") => Boolean(await env.DB.prepare(
+    "SELECT 1 AS x FROM item_decisions WHERE household_id = ? AND kind = ? AND a = ? AND b = ? AND deleted_at IS NULL",
+  ).bind(who.householdId, kind, a, b).first());
+  const nameOf = async (id) => (await env.DB.prepare("SELECT name FROM items WHERE household_id = ? AND id = ?").bind(who.householdId, id).first())?.name ?? null;
+  for (const op of list) {
+    if (op.type === "item.merge") {
+      const [a, b] = [await nameOf(op.from_item_id), await nameOf(op.into_item_id)];
+      if (a && b && await has("apart", ...apartKey(a, b).split("|"))) return "apart";
+    } else if (op.type === "item.alias") {
+      if (await has("no_alias", nameKey(String(op.name ?? "")), String(op.item_id))) return "no_alias";
+    } else if (op.type === "product.move") {
+      if (await has("no_move", String(op.product_id), String(op.item_id))) return "no_move";
+    } else if (op.type === "item.rename") {
+      if (await has("no_rename", String(op.item_id))) return "no_rename";
+    } else if (op.type === "item.remove") {
+      if (await has("keep", String(op.item_id))) return "keep";
+    } else if (op.type === "item.translate") {
+      if (await has("no_translate", String(op.item_id), nameKey(String(op.name_en ?? "")))) return "no_translate";
+    }
+  }
+  return null;
+}
+
 async function ops({ env, who, body, ctx }) {
   const list = body?.ops;
   if (!Array.isArray(list) || list.length > MAX_OPS) return json({ error: "bad_ops" }, 400);
   // The whole request is refused before anything is applied.
   if (who.role === "importer" && !list.every(importerMayApply)) return json({ error: "forbidden" }, 403);
   if (who.role === "reviewer" && (!list.every(reviewerMayApply) || await reviewerTouchesExcluded(env, who, list)
-    || await reviewerMergeRefused(env, who, list))) {
+    || await reviewerMergeRefused(env, who, list) || await reviewerDecided(env, who, list))) {
     return json({ error: "forbidden" }, 403);
   }
   // At most NIGHTLY_MERGE_MAX merges a day from the nightly check (usage_limits, bucket auto_merge:<household>:<day>).
   const merges = who.role === "reviewer" ? list.filter((o) => o.type === "item.merge").length : 0;
   if (merges && (await takeSome(env, "auto_merge", who.householdId, merges, NIGHTLY_MERGE_MAX)) < merges) {
     return json({ error: "too_many_merges" }, 429);
+  }
+  // At most NIGHTLY_REMOVE_MAX junk removals a day (bucket auto_remove:<household>:<day>).
+  const removes = who.role === "reviewer" ? list.filter((o) => o.type === "item.remove").length : 0;
+  if (removes && (await takeSome(env, "auto_remove", who.householdId, removes, NIGHTLY_REMOVE_MAX)) < removes) {
+    return json({ error: "too_many_removes" }, 429);
   }
   if (who.recipesOnly && (!list.every(guestMayApply) || !(await guestOwnsAll(env, who, list)))) {
     return json({ error: "recipes_only" }, 403);

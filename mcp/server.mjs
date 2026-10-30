@@ -36,6 +36,24 @@ import { localName, shownRecipe, recipeLang, otherLang } from "../public/shared/
 /** kitchen_recent_purchases: candidate items per purchase, and the output size (Claude cannot read more). */
 const CANDIDATES_MAX = 15;
 const RECENT_CHARS_MAX = 14_000;
+/**
+ * The nightly check's carry-over (fetcher/review.mjs, 30-10-2026: "22
+ * aankopen zijn niet gecontroleerd — wat moet ik daarmee?"): with
+ * KITCHEN_CHECKED_FILE set, purchases already checked on an earlier night are
+ * left out, the unchecked ones of the last RECENT_CARRY_DAYS days come oldest
+ * first, and the ids shown go to KITCHEN_SHOWN_FILE; what the cap leaves out
+ * comes the next night.
+ */
+const RECENT_CARRY_DAYS = 14;
+
+function readIds(file) {
+  try {
+    const v = JSON.parse(fs.readFileSync(file, "utf8"));
+    return Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 import { starsByRecipe, STARS_NEUTRAL, STARS_MAX } from "../public/shared/recipe-ratings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -715,11 +733,20 @@ const TOOLS = [
   },
   {
     name: "kitchen_recent_purchases",
-    description: "What was bought lately on receipts (AH, Lidl, a receipt photo), never excluded products, compact and capped: per purchase the day, store, how many, the product (with its id) and the item it is linked to (with the item's other names, whether it is counted down at a usage rate, and the item's other products), then at most 15 CANDIDATE items that might fit better (items sharing a word with the product or its item, and items counted down at a usage rate). Use it to check product-to-item links. days: how far back by the day the purchase was added (default 2). The output stops at a fixed size with a note when cut.",
+    description: "What was bought lately on receipts (AH, Lidl, a receipt photo), never excluded products, compact and capped: per purchase the day, store, how many, the product (with its id) and the item it is linked to (with the item's other names, whether it is counted down at a usage rate, and the item's other products), then at most 15 CANDIDATE items that might fit better (items sharing a word with the product or its item, and items counted down at a usage rate). Use it to check product-to-item links. days: how far back by the day the purchase was added (default 2). The output stops at a fixed size; on the nightly check the purchases it leaves out are shown the next night (never report them).",
     inputSchema: { type: "object", properties: { days: { type: "integer", minimum: 1, maximum: 30 } } },
     async run({ days = 2 }) {
       const s = await state();
-      const since = addDays(localToday(), -days);
+      const checkedFile = process.env.KITCHEN_CHECKED_FILE;
+      const shownFile = process.env.KITCHEN_SHOWN_FILE;
+      // The first night has no checked file: only the window asked for.
+      const checked = checkedFile ? readIds(checkedFile) : null;
+      const carry = Boolean(checked);
+      const done = new Set(checked ?? []);
+      const since = addDays(localToday(), -(carry ? Math.max(days, RECENT_CARRY_DAYS) : days));
+      // The first night with a shown file: what is older than the window counts as checked, silently.
+      const quiet = !carry && shownFile ? addDays(localToday(), -Math.max(days, RECENT_CARRY_DAYS)) : null;
+      const before = [];
       const purchases = [...cache.purchases.values()];
       const products = new Map(s.products.map((p) => [p.id, p]));
       const aliasesByItem = new Map();
@@ -733,13 +760,18 @@ const TOOLS = [
       const groups = new Map();
       for (const r of purchases) {
         if (r.deleted_at || r.source !== "receipt") continue;
-        if (String(r.created_at ?? "").slice(0, 10) < since && String(r.bought_on ?? "") < since) continue;
+        if (String(r.created_at ?? "").slice(0, 10) < since && String(r.bought_on ?? "") < since) {
+          if (quiet && (String(r.created_at ?? "").slice(0, 10) >= quiet || String(r.bought_on ?? "") >= quiet)) before.push(r.id);
+          continue;
+        }
+        if (done.has(r.id)) continue;
         const p = products.get(r.product_id);
         const it = s.items.get(r.item_id);
         if (bad(r.title) || bad(it?.name) || (p && (bad(p.name) || bad(`${p.brand ?? ""} ${p.name}`)))) continue;
         const key = `${r.bought_on}|${r.store}|${r.product_id ?? r.title}|${r.item_id}`;
-        const g = groups.get(key) ?? { r, p, it, n: 0 };
+        const g = groups.get(key) ?? { r, p, it, n: 0, ids: [] };
         g.n += Number(r.qty) || 1;
+        g.ids.push(r.id);
         groups.set(key, g);
       }
       // Candidates: every live, non-excluded item with the words that name it
@@ -766,7 +798,10 @@ const TOOLS = [
           .slice(0, CANDIDATES_MAX)
           .map(({ c }) => `${c.i.name} [item: ${c.i.id}]${c.aka.length ? ` (aka ${c.aka.slice(0, 3).join(", ")})` : ""}${c.rate ? ` {${rateEn(c.rate.per_day)}}` : ""}`);
       };
-      const blocks = [...groups.values()].sort((a, b) => String(b.r.bought_on).localeCompare(String(a.r.bought_on)) || (a.it?.name ?? "").localeCompare(b.it?.name ?? ""))
+      // Carried over: the oldest unchecked first, so nothing waits for ever.
+      const order = (a, b) => (carry ? String(a.r.bought_on).localeCompare(String(b.r.bought_on)) : String(b.r.bought_on).localeCompare(String(a.r.bought_on)));
+      const sorted = [...groups.values()].sort((a, b) => order(a, b) || (a.it?.name ?? "").localeCompare(b.it?.name ?? ""));
+      const blocks = sorted
         .map(({ r, p, it, n }) => {
           const others = it ? s.products.filter((x) => x.item_id === it.id && x.id !== p?.id && !bad(x.name)).slice(0, 3).map(productLabel) : [];
           const rate = it ? rowRate({ title: it.name, pack_size: "" }, it) : null;
@@ -777,15 +812,23 @@ const TOOLS = [
             + `${others.length ? `; other products of this item: ${others.join("; ")}` : ""}`
             + `${cands.length ? `\n    candidate items: ${cands.join(" | ")}` : ""}`;
         });
-      if (!blocks.length) return `No receipt purchases since ${since}.`;
-      let text = `Receipt purchases since ${since} (${blocks.length}):`;
+      let text = carry ? `Unchecked receipt purchases since ${since} (${blocks.length}):` : `Receipt purchases since ${since} (${blocks.length}):`;
       let shown = 0;
       for (const b of blocks) {
         if (text.length + b.length + 1 > RECENT_CHARS_MAX) break;
         text += `\n${b}`;
         shown++;
       }
-      if (shown < blocks.length) text += `\n(cut off: ${blocks.length - shown} more purchases not shown; ask again with days 1)`;
+      if (shownFile) {
+        const had = readIds(shownFile) ?? [];
+        fs.writeFileSync(shownFile, JSON.stringify([...new Set([...had, ...before, ...sorted.slice(0, shown).flatMap((g) => g.ids)])]));
+      }
+      if (!blocks.length) return carry ? `No unchecked receipt purchases since ${since}.` : `No receipt purchases since ${since}.`;
+      if (shown < blocks.length) {
+        text += carry
+          ? `\n(${blocks.length - shown} more wait for the next night: they are checked then. Do not mention them.)`
+          : `\n(cut off: ${blocks.length - shown} more purchases not shown; ask again with days 1)`;
+      }
       return text;
     },
   },

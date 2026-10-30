@@ -88,6 +88,11 @@ export function rowHidden(kind, row, hidden) {
   if (row.item_id && hidden.items.has(row.item_id)) return true;
   if (row.product_id && hidden.products.has(row.product_id)) return true;
   if (kind === "auto_changes") return namesHidden(row.name, hidden) || namesHidden(row.target, hidden);
+  // A decision about a hidden item (item_decisions: an id or a name in a / b).
+  if (kind === "decisions") {
+    return hidden.items.has(row.a) || hidden.items.has(row.b) || hidden.names.includes(row.a) || hidden.names.includes(row.b)
+      || namesHidden(row.a_name, hidden) || namesHidden(row.b_name, hidden);
+  }
   return false;
 }
 
@@ -104,7 +109,10 @@ export function rowFor(kind, row, hidden) {
   if (kind === "reviews") {
     const out = { ...row };
     for (const f of ["fixed", "decide", "errors"]) {
-      if (Array.isArray(out[f])) out[f] = out[f].filter((l) => !namesHidden(textOf(l), hidden) && !namesHidden(l?.undo, hidden));
+      if (Array.isArray(out[f])) {
+        out[f] = out[f].filter((l) => !namesHidden(textOf(l), hidden) && !namesHidden(l?.undo, hidden)
+          && !(Array.isArray(l?.ids) && l.ids.some((id) => hidden.items.has(id))) && !(Array.isArray(l?.names) && l.names.some((n) => namesHidden(n, hidden))));
+      }
     }
     return out;
   }
@@ -112,7 +120,10 @@ export function rowFor(kind, row, hidden) {
     return { ...row, lines: row.lines.filter((l) => !(l?.item_id && hidden.items.has(l.item_id))) };
   }
   if (kind === "recipes" && Array.isArray(row.ingredient_links?.lines)) {
-    return { ...row, ingredient_links: { ...row.ingredient_links, lines: row.ingredient_links.lines.filter((l) => !(l?.item_id && hidden.items.has(l.item_id))) } };
+    const fixed = row.ingredient_links.fixed
+      ? Object.fromEntries(Object.entries(row.ingredient_links.fixed).filter(([, f]) => !(f?.item_id && hidden.items.has(f.item_id))))
+      : undefined;
+    return { ...row, ingredient_links: { ...row.ingredient_links, lines: row.ingredient_links.lines.filter((l) => !(l?.item_id && hidden.items.has(l.item_id))), ...(fixed ? { fixed } : {}) } };
   }
   return row;
 }

@@ -9,6 +9,7 @@ import { nameKey, splitPrep } from "./ingredients.js";
 import { canonicalName, GENERIC } from "./item-names.js";
 import { numberForms, VARIETIES } from "./ingredient-match.js";
 import { isExcluded, isExcludedLookalike } from "./excluded.js";
+import { apartPair } from "./ops.js";
 
 /** Two items bought this often are both established: a link between them is Thomas's call. */
 export const HEAVY = 5;
@@ -111,14 +112,15 @@ function looksLikeTypo(a, b) {
 
 const hasOwnRate = (i) => i.use_per_day !== null && i.use_per_day !== undefined && (i.rate_source === "person" || i.rate_source === "learned");
 
-/** Per item: purchases, stock (live pantry amount), deal rules, its own rate. */
+/** Per item: purchases, stock (live pantry amount), deal rules, its own rate, its products. */
 export function itemFacts(data) {
   const facts = {};
   for (const i of Object.values(data.items)) {
     if (i.deleted_at) continue;
-    facts[i.id] = { item: i, bought: 0, stock: 0, rules: 0, rate: hasOwnRate(i) };
+    facts[i.id] = { item: i, bought: 0, stock: 0, rules: 0, rate: hasOwnRate(i), products: 0 };
   }
   for (const p of Object.values(data.purchases ?? {})) if (!p.deleted_at && facts[p.item_id]) facts[p.item_id].bought++;
+  for (const p of Object.values(data.products ?? {})) if (!p.deleted_at && facts[p.item_id]) facts[p.item_id].products++;
   for (const r of Object.values(data.pantry ?? {})) if (!r.deleted_at && facts[r.item_id]) facts[r.item_id].stock += Math.max(0, Number(r.amount) || 0);
   for (const r of Object.values(data.deal_rules ?? {})) if (!r.deleted_at && facts[r.item_id]) facts[r.item_id].rules++;
   return facts;
@@ -136,6 +138,114 @@ export function junkName(name) {
   const s = String(name ?? "");
   return /[?¿]/.test(s) || /^\s*(?:[-–•·*]|x\s)/i.test(s)
     || /(?:^|[^\p{L}])(?:maybe|misschien|mss|fzo|denk|evt|eventueel)(?=$|[^\p{L}])/iu.test(s);
+}
+
+/* ------------------------------------------- the household's decisions */
+
+/** The key of two names kept apart (item_decisions kind apart). */
+export const apartKey = (a, b) => apartPair(a, b).join("|");
+
+/**
+ * The household's decisions (item_decisions rows, live) as sets the rules
+ * read: apart (name-key pairs), noRename (item ids), keep (item ids: no
+ * junk), noAlias ("name key|item id"), noMove ("product id|item id").
+ */
+export function decisionSets(rows) {
+  const out = { apart: new Set(), noRename: new Set(), keep: new Set(), noAlias: new Set(), noMove: new Set() };
+  for (const d of Object.values(rows ?? {})) {
+    if (!d || d.deleted_at) continue;
+    if (d.kind === "apart") out.apart.add(`${d.a}|${d.b}`);
+    else if (d.kind === "no_rename") out.noRename.add(d.a);
+    else if (d.kind === "keep") out.keep.add(d.a);
+    else if (d.kind === "no_alias") out.noAlias.add(`${d.a}|${d.b}`);
+    else if (d.kind === "no_move") out.noMove.add(`${d.a}|${d.b}`);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------- junk names */
+
+/** First words that make a line vague: "Iets op stokbroodje", "Ander fizzy", "Meer tapas". */
+export const VAGUE_LEAD = new Set(["iets", "ander", "andere", "anders", "meer", "nog", "wat", "something", "other", "more"]);
+/** Words that name no product on their own: a line of only these is vague ("Lunch", "Drankje", "Electronica bak"). */
+export const VAGUE_WORDS = new Set([
+  "lunch", "ontbijt", "avondeten", "abendessen", "abundessen", "diner", "eten", "drinken", "drankje", "drankjes",
+  "snack", "snacks", "snackje", "tussendoortje", "fizzy", "electronica", "elektronica", "bak", "spullen", "dingen",
+  "boodschappen", "iets", "lekkers", "food", "drink", "drinks", "stuff",
+]);
+
+/**
+ * Why a name is no thing (30-10-2026: "die generic dingen horen niet
+ * eens in mijn database"), or null: shouting ("Kattenbak!!!"), several
+ * things in one line, a vague first word ("Iets op stokbroodje") or only
+ * vague words ("Lunch", "Electronica bak"). A question mark alone is no junk:
+ * "Knoflookpoeder?" is a thing with a bad spelling (tidyName).
+ */
+export function junkReason(name) {
+  const s = String(name ?? "");
+  if (/!{2,}/.test(s)) return "uitroeptekens";
+  const c = cleanName(s);
+  if (c.several) return "meer dingen";
+  const words = nameKey(s.replace(/[!?¿¡]/g, " ")).split(" ").filter(Boolean);
+  if (!words.length) return "leeg";
+  if (words.length > 1 && VAGUE_LEAD.has(words[0])) return "vaag";
+  if (words.every((w) => VAGUE_WORDS.has(w))) return "vaag";
+  return null;
+}
+
+/**
+ * Is this item junk the nightly check may clean up, and why (or null)? Its
+ * name says so (junkReason), and it is no real thing in the data: never
+ * bought as a product (no product row: the old To Do lines are notes), no
+ * deal rule, no rate of its own, not private, nothing on the never-suggest
+ * list, and the household did not undo its removal (decision keep).
+ */
+export function junkItem(f, { keep = new Set() } = {}) {
+  const name = f?.item?.name ?? "";
+  if (!f || f.item.private_to || keep.has(f.item.id) || isExcluded(name) || isExcludedLookalike(name)) return null;
+  if (f.products > 0 || f.rules > 0 || f.rate) return null;
+  return junkReason(name);
+}
+
+/** A junk name without its noise: "Eten minoes!!!!!" -> "Eten minoes". */
+const plainOf = (name) => String(name ?? "").replace(/[!?¿¡]+/g, " ").replace(/\s+/g, " ").trim();
+const sortedWords = (name) => {
+  const key = cleanName(plainOf(name)).key;
+  return key ? key.split(" ").sort().join(" ") : "";
+};
+
+/**
+ * Does junk name `junk` clearly mean the item named `name`? The same words
+ * in another order ("Eten minoes!!!" is "Minoes eten"), or the name without
+ * its noise is a CLEAR pair with it ("Kattenbakvulling!!!"). Never a guess.
+ */
+export function junkMeans(junk, name) {
+  if (!junkReason(junk) || junkReason(name)) return false;
+  const plain = plainOf(junk);
+  if (!plain || junkReason(plain) === "meer dingen") return false;
+  const a = sortedWords(plain);
+  return Boolean(a) && (a === sortedWords(name) || clearPair(plain, name));
+}
+
+/**
+ * What a junk item means among the live items: { into } when exactly one
+ * other item is clearly it (junkMeans), { ask } when exactly one other
+ * name starts with it and is longer ("Kattenbak!!!" and "Kattenbakvulling":
+ * the household decides), else null (it goes).
+ */
+export function junkMeaning(id, facts) {
+  const name = facts[id].item.name;
+  const others = Object.keys(facts).filter((x) => x !== id && !facts[x].item.private_to && !junkReason(facts[x].item.name));
+  const sure = others.filter((x) => junkMeans(name, facts[x].item.name));
+  if (sure.length === 1) return { into: sure[0] };
+  if (sure.length > 1) return { ask: pickTarget(sure, facts) };
+  const compact = cleanName(plainOf(name)).compact;
+  if (compact.length < 6) return null;
+  const starts = others.filter((x) => {
+    const c = cleanName(facts[x].item.name).compact;
+    return c.length > compact.length && c.startsWith(compact);
+  });
+  return starts.length === 1 ? { ask: starts[0] } : null;
 }
 
 /**
@@ -160,7 +270,7 @@ export function tidyName(name) {
  */
 export function pickTarget(ids, facts, targets = new Set()) {
   const chosen = (f) => (targets.has(nameKey(f.item.name)) ? 1 : 0);
-  const decent = (f) => (junkName(f.item.name) ? 0 : 1);
+  const decent = (f) => (junkName(f.item.name) || junkReason(f.item.name) ? 0 : 1);
   return [...ids].sort((a, b) => {
     const x = facts[a], y = facts[b];
     return (chosen(y) - chosen(x)) || (decent(y) - decent(x)) || (y.bought - x.bought) || (y.stock - x.stock) || ((y.rules > 0 || y.rate) - (x.rules > 0 || x.rate))
@@ -184,8 +294,10 @@ function conflict(from, into) {
  * [{ id, reason }] } (every member of a family, clear groups included,
  * merges into its target only with --include).
  */
-export function planGroups(data, { targets = [], excludes = [] } = {}) {
+export function planGroups(data, { targets = [], excludes = [], apart = new Set() } = {}) {
   const facts = itemFacts(data);
+  // Two names the household keeps apart (item_decisions) are never linked, clear or doubt.
+  const isApart = (a, b) => apart.size > 0 && apart.has(apartKey(facts[a].item.name, facts[b].item.name));
   const chosen = new Set(targets.map((n) => nameKey(n)));
   const left = new Set(excludes.map((n) => nameKey(n)));
   const ids = Object.keys(facts).filter((id) => {
@@ -205,6 +317,7 @@ export function planGroups(data, { targets = [], excludes = [] } = {}) {
   for (const id of usable) heavyIn[id] = facts[id].bought >= HEAVY ? 1 : 0;
   const doubtLinks = [];
   const linkClear = (a, b, reason) => {
+    if (isApart(a, b)) return;
     const ra = find(parent, a), rb = find(parent, b);
     if (ra === rb) return;
     if (heavyIn[ra] + heavyIn[rb] > 1) return linkDoubt(a, b, `${reason}, beide vaak gekocht`);
@@ -217,6 +330,7 @@ export function planGroups(data, { targets = [], excludes = [] } = {}) {
     if (fa !== fb) family[fb] = fa;
   };
   const linkDoubt = (a, b, reason) => {
+    if (isApart(a, b)) return;
     doubtLinks.push([a, b, reason]);
     unite(a, b);
   };
@@ -368,6 +482,8 @@ export function familyMembers(f) {
 export const NIGHTLY_MERGE_MAX = 10;
 /** At most this many names tidied a night (item.rename, tidyName). */
 export const NIGHTLY_RENAME_MAX = 10;
+/** At most this many junk items removed a night (item.remove; worker/api.js counts them in usage_limits). */
+export const NIGHTLY_REMOVE_MAX = 10;
 
 /** The compact keys a name stands for by the CLEAR rules alone, or null when it has a doubt word, a purpose, several things or is generic. */
 function clearForms(name) {
@@ -406,12 +522,15 @@ export function clearPair(a, b) {
  * rates that differ, two deal rules. The same answer on the home server and
  * in the worker.
  */
-export function mergeProblem(from, into) {
+export function mergeProblem(from, into, { apart = new Set() } = {}) {
   const a = from.item.name, b = into.item.name;
   if ([a, b].some((n) => isExcluded(n) || isExcludedLookalike(n))) return "excluded";
   // A private item (items.private_to) never merges with a public one or another member's.
   if ((from.item.private_to ?? null) !== (into.item.private_to ?? null)) return "private";
-  if (!clearPair(a, b)) return "not_clear";
+  // "Apart houden", or a merge the household undid.
+  if (apart.has(apartKey(a, b))) return "apart";
+  // A junk name that clearly means the other ("Eten minoes!!!" -> "Minoes eten") counts as clear.
+  if (!clearPair(a, b) && !junkMeans(a, b)) return "not_clear";
   if (from.bought >= HEAVY && into.bought >= HEAVY) return "both_heavy";
   const why = conflict(from, into);
   if (why.length) return from.rules && into.rules ? "deal_rule" : "rate";
@@ -426,24 +545,50 @@ export function mergeProblem(from, into) {
  * get their tidy spelling (tidyName; item.rename), tonight's targets first,
  * at most `maxRenames`; never an excluded thing.
  */
-export function nightlyPlan({ clear, facts }, { max = NIGHTLY_MERGE_MAX, maxRenames = NIGHTLY_RENAME_MAX } = {}) {
+export function nightlyPlan({ clear, facts }, { max = NIGHTLY_MERGE_MAX, maxRenames = NIGHTLY_RENAME_MAX, maxRemoves = NIGHTLY_REMOVE_MAX,
+  decisions = decisionSets([]) } = {}) {
   const merges = [], held = [];
   let left = 0;
+  const { apart, keep, noRename } = decisions;
+  const isJunk = (id) => Boolean(junkItem(facts[id], { keep }));
   for (const g of clear) {
     for (const m of g.members) {
-      const why = mergeProblem(facts[m.id], facts[g.target]);
+      const why = mergeProblem(facts[m.id], facts[g.target], { apart });
       if (why) held.push({ from: m.id, into: g.target, why });
-      else if (merges.length < max) merges.push({ from: m.id, into: g.target });
+      else if (merges.length < max) merges.push({ from: m.id, into: g.target, how: "clear" });
       else left++;
+    }
+  }
+  // Junk names (30-10-2026): one that clearly means an item is merged
+  // into it, one that might is asked, the rest goes (item.remove). Never renamed.
+  const busy = new Set(merges.flatMap((m) => [m.from, m.into]));
+  const removes = [], junkAsks = [];
+  for (const id of Object.keys(facts).sort((a, b) => facts[a].item.name.localeCompare(facts[b].item.name, "nl") || a.localeCompare(b))) {
+    if (busy.has(id)) continue;
+    const reason = junkItem(facts[id], { keep });
+    if (!reason) continue;
+    const meaning = junkMeaning(id, facts);
+    if (meaning?.into) {
+      const why = mergeProblem(facts[id], facts[meaning.into], { apart });
+      if (why === "apart") continue;
+      if (why) held.push({ from: id, into: meaning.into, why });
+      else if (merges.length < max) { merges.push({ from: id, into: meaning.into, how: "junk" }); busy.add(id); }
+      else left++;
+    } else if (meaning?.ask) {
+      if (!apart.has(apartKey(facts[id].item.name, facts[meaning.ask].item.name))) junkAsks.push({ from: id, into: meaning.ask });
+    } else if (removes.length < maxRemoves) {
+      removes.push({ id, reason });
+    } else {
+      left++;
     }
   }
   const merged = new Set(merges.map((m) => m.from));
   const targets = new Set(merges.map((m) => m.into));
   const renames = Object.keys(facts)
-    .filter((id) => !merged.has(id))
+    .filter((id) => !merged.has(id) && !noRename.has(id) && !isJunk(id))
     .map((id) => ({ id, name: tidyName(facts[id].item.name), was: facts[id].item.name }))
     .filter((r) => r.name && !isExcluded(r.was) && !isExcludedLookalike(r.was))
     .sort((a, b) => (targets.has(b.id) - targets.has(a.id)) || a.was.localeCompare(b.was, "nl") || a.id.localeCompare(b.id))
     .slice(0, maxRenames);
-  return { merges, held, left, renames };
+  return { merges, held: held.filter((h) => h.why !== "apart"), left, renames, removes, junkAsks };
 }

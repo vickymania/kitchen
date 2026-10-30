@@ -42,10 +42,14 @@ export const REVIEWER_ONLY_OPS = new Set(["review.save", "recipe.links"]);
 // NIGHTLY_MERGE_MAX a day); a tidier spelling of an item's name (item.rename,
 // the same key only); which item each recipe line means (recipe.links); and its report. Never a new item, never removing a
 // name, never anything else. Every change lands in the changelog
-// (auto_changes, public/shared/ops.js logChange).
+// (auto_changes, public/shared/ops.js logChange). Since the first real
+// night (30-10-2026, "weg ermee"): item.remove of an item the junk
+// rule flags (public/shared/dedupe.js junkItem; worker/api.js checks it, at
+// most NIGHTLY_REMOVE_MAX a day). Never what the household undid or kept
+// apart (item_decisions, worker/api.js reviewerDecided).
 // An English name for an item (item.translate, 0029) too: as Claude's
 // (source "claude"), so a person's is never replaced, and never a clear.
-const REVIEWER_OPS = new Set(["item.alias", "product.move", "item.merge", "item.rename", "review.save", "recipe.links", "item.translate"]);
+const REVIEWER_OPS = new Set(["item.alias", "product.move", "item.merge", "item.rename", "review.save", "recipe.links", "item.translate", "item.remove"]);
 
 /**
  * May the reviewer device apply this op? item.alias only to add a name (no
@@ -63,6 +67,7 @@ export function reviewerMayApply(op) {
   }
   if (op.type === "item.rename") return typeof op.item_id === "string" && typeof op.name === "string" && !/[?¿]/.test(op.name);
   if (op.type === "recipe.links") return typeof op.recipe_id === "string" && Array.isArray(op.lines);
+  if (op.type === "item.remove") return typeof op.item_id === "string" && typeof op.on === "string";
   if (op.type === "item.translate") return typeof op.item_id === "string" && typeof op.name_en === "string" && op.name_en.trim() !== "" && op.source === "claude";
   return true;
 }
