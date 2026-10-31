@@ -189,8 +189,32 @@ export function junkReason(name) {
   const words = nameKey(s.replace(/[!?¿¡]/g, " ")).split(" ").filter(Boolean);
   if (!words.length) return "leeg";
   if (words.length > 1 && VAGUE_LEAD.has(words[0])) return "vaag";
-  if (words.every((w) => VAGUE_WORDS.has(w))) return "vaag";
+  // "Eten voor Vic" is as vague as "Eten": who it is for names no product.
+  const at = words.indexOf("voor");
+  const core = at > 0 ? words.slice(0, at) : words;
+  if (core.every(isVagueWord)) return "vaag";
   return null;
+}
+
+/** A vague word, or one typo away from one ("drankjesz"): long words only, so "eten" never matches "eten"-like products. */
+function isVagueWord(w) {
+  if (VAGUE_WORDS.has(w)) return true;
+  if (w.length < 6) return false;
+  for (const v of VAGUE_WORDS) if (v.length >= 5 && oneEditApart(w, v)) return true;
+  return false;
+}
+
+function oneEditApart(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (a.length < b.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
 }
 
 /**
@@ -238,6 +262,9 @@ export function junkMeaning(id, facts) {
   const others = Object.keys(facts).filter((x) => x !== id && !facts[x].item.private_to && !junkReason(facts[x].item.name));
   const sure = others.filter((x) => junkMeans(name, facts[x].item.name));
   if (sure.length === 1) return { into: sure[0] };
+  // Only vague words ("Ontbijt", "Eten voor Vic"): it means nothing, so it
+  // goes; never asked (31-10-2026: "weer 5 onbenullige dingen").
+  if (junkReason(plainOf(name)) === "vaag") return null;
   if (sure.length > 1) return { ask: pickTarget(sure, facts) };
   const compact = cleanName(plainOf(name)).compact;
   if (compact.length < 6) return null;

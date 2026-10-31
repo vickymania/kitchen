@@ -28,7 +28,7 @@ const UNIT_WORDS = {
   handful: ["handje", "handjes", "handvol", "handful", "handfuls"],
   sprig: ["takje", "takjes", "sprig", "sprigs"],
   dash: ["scheut", "scheutje", "scheutjes", "dash", "splash"],
-  slice: ["plak", "plakken", "plakje", "plakjes", "slice", "slices"],
+  slice: ["plak", "plakken", "plakje", "plakjes", "snee", "sneeën", "sneetje", "sneetjes", "slice", "slices"],
   piece: ["stuk", "stuks", "stukje", "stukjes", "piece", "pieces", "pcs"],
   cup: ["kop", "kopje", "kopjes", "koppen", "cup", "cups"],
   strip: ["strip", "strips"],

@@ -222,7 +222,9 @@ export function questionState(view, d) {
   const { apart } = decisionSets(view.decisions);
   const pairs = [];
   for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) pairs.push(apartKey(items[i].name, items[j].name));
-  const status = items.length < 2 ? "merged" : pairs.every((p) => apart.has(p)) ? "apart" : "open";
+  // An asked item the nightly junk rule removed (item.remove) is cleaned up, not merged.
+  const removed = (d.ids ?? []).some((id) => view.items?.[id]?.undo_rows?.kind === "remove" && view.items[id].deleted_at);
+  const status = items.length < 2 ? (removed ? "removed" : "merged") : pairs.every((p) => apart.has(p)) ? "apart" : "open";
   return { items, status };
 }
 
@@ -247,7 +249,7 @@ function decideItem(view, d) {
   const slot = h("div", { class: "decide-acts" });
   const li = h("li", {}, h("span", {}, d.text), slot);
   if (q.status !== "open") {
-    slot.append(h("small", { class: "undone mono" }, t(q.status === "apart" ? "review.kept_apart" : "review.merged")));
+    slot.append(h("small", { class: "undone mono" }, t(q.status === "apart" ? "review.kept_apart" : q.status === "removed" ? "review.cleaned_up" : "review.merged")));
     return li;
   }
   // More than two names: tick which ones are one thing.

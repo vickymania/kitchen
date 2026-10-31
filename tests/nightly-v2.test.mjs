@@ -179,6 +179,16 @@ test("junk: vague, shouted and several-things names never bought as a product; o
   assert.equal(dedupe.nightlyPlan(dedupe.planGroups(s), { maxRemoves: 1 }).removes.length, 1, "capped; the rest the next night");
 });
 
+test("junk: a name of only vague words goes, even when a longer name starts with it; never asked (31-10-2026)", () => {
+  for (const n of ["Eten voor Vic", "drankjesz", "Ontbijt"]) assert.equal(dedupe.junkReason(n), "vaag", n);
+  for (const n of ["Ontbijtgranen", "Minoes eten", "Snoepjes"]) assert.equal(dedupe.junkReason(n), null, n);
+  const s = house([["Drankje", 1], ["drankjesz", 1], ["Eten", 2], ["Eten voor Vic", 1], ["Ontbijt", 3], ["Ontbijtgranen", 6, { product: true }]]);
+  const plan = dedupe.nightlyPlan(dedupe.planGroups(s));
+  const name = (id) => s.items[id].name;
+  assert.deepEqual(plan.junkAsks, []);
+  assert.deepEqual(plan.removes.map((r) => name(r.id)).sort(), ["Drankje", "Eten", "Eten voor Vic", "Ontbijt", "drankjesz"]);
+});
+
 test("apart: two names kept apart are never grouped, merged or asked again; an undone rename is never redone", () => {
   const s = house([["Nootmuskaat", 3], ["Gemalen nootmuskaat", 1], ["Pastinaak", 2], ["x pastinaak", 1], ["Kerrie?", 1]]);
   const sync = (st) => Object.fromEntries(Object.entries(st).map(([k, rows]) => [k, Object.values(rows)]));

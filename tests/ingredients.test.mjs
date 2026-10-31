@@ -159,3 +159,8 @@ test("the same line in two sections stays twice: an egg for the dough and one fo
   const lines = ingredients.map((i) => (i.heading ? `# ${i.name}` : i.raw));
   assert.deepEqual(lines, ["# Voor het deeg", "500 g bloem", "1 ei", "# Voor de vulling", "750 g gehakt", "1 ei", "# Verder nodig", "1 ei, losgeklopt"]);
 });
+
+test("sneetjes is a slice: '8 sneetjes brood' is 8 slices of brood (31-10-2026)", () => {
+  const ing = parseIngredient("8 sneetjes brood");
+  assert.deepEqual([ing.qty, ing.unit, ing.name], [8, "slice", "brood"]);
+});
