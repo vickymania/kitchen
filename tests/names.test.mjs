@@ -304,9 +304,11 @@ test("widget names: the most bought first, with other names and product, never a
   ops.push({ type: "entry.add", id: "entry-wn-brokken", item_id: BROKKEN, title: "Minoes brokken" });
   ops.push({ type: "entry.add", id: "entry-wn-groenho", item_id: "item-wn-groenhof", title: "Groenhof" });
   for (let i = 0; i < ops.length; i += 100) await send(...ops.slice(i, i + 100));
+  // The route scores by the real clock, so the purchases are bought today.
+  const today = new Date().toISOString().slice(0, 10);
   await send(
-    { type: "purchase.add", id: "purchase-wn-00001", item_id: BROKKEN, title: "Minoes brokken", bought_on: DAY, source: "history" },
-    { type: "purchase.add", id: "purchase-wn-00002", item_id: "item-wn-groenhof", title: "Groenhof", bought_on: DAY, source: "history" },
+    { type: "purchase.add", id: "purchase-wn-00001", item_id: BROKKEN, title: "Minoes brokken", bought_on: today, source: "history" },
+    { type: "purchase.add", id: "purchase-wn-00002", item_id: "item-wn-groenhof", title: "Groenhof", bought_on: today, source: "history" },
     { type: "item.alias", id: "alias-wn-pluiz01", item_id: BROKKEN, name: "Pluizenbolbrokkenman" },
     { type: "product.put", id: "product-wn-brokken", product: { name: "Minoes Brokken kip", brand: "AH", size: "2 kg", item_id: BROKKEN } },
     { type: "preference.set", id: "pref-wn-brokken01", item_id: BROKKEN, product_id: "product-wn-brokken" },

@@ -7,7 +7,8 @@
 // source of truth for the offer shape, the never-suggest filter and the op engine)
 // to ~/kitchen-fetcher, keeping the repo's layout so the imports are the same.
 // config.env, token, importer-token, reviewer-token, ah-tokens.json, lidl-tokens.json,
-// ah-state/, lidl-state/, review-state/, prices-state.json and prices-cache.json.gz there are never overwritten.
+// action-session.json, kruidvat-session.json, ah-state/, lidl-state/, action-state/,
+// kruidvat-state/, review-state/, prices-state.json and prices-cache.json.gz there are never overwritten.
 // The nightly check (fetcher/review.sh) also needs mcp/server.mjs and its shared files.
 // --cron installs (or replaces) one crontab line, daily
 // 06:17 Dutch time, for run.sh; MODE and AH_MODE in config.env say whether
@@ -32,6 +33,12 @@ const FILES = [
   ["fetcher/ah_client.mjs", "fetcher/ah_client.mjs"],
   ["fetcher/lidl_import.mjs", "fetcher/lidl_import.mjs"],
   ["fetcher/lidl_client.mjs", "fetcher/lidl_client.mjs"],
+  ["fetcher/action_import.mjs", "fetcher/action_import.mjs"],
+  ["fetcher/action_client.mjs", "fetcher/action_client.mjs"],
+  ["fetcher/cookie_session.mjs", "fetcher/cookie_session.mjs"],
+  ["fetcher/receipt_run.mjs", "fetcher/receipt_run.mjs"],
+  ["fetcher/kruidvat_import.mjs", "fetcher/kruidvat_import.mjs"],
+  ["fetcher/kruidvat_client.mjs", "fetcher/kruidvat_client.mjs"],
   ["fetcher/prices.mjs", "fetcher/prices.mjs"],
   ["fetcher/review.mjs", "fetcher/review.mjs"],
   ["fetcher/review.sh", "fetcher/review.sh"],
@@ -114,14 +121,16 @@ try {
     `chmod 755 ~/${DIR}/run.sh ~/${DIR}/fetcher/review.sh`,
     `chmod 700 ~/${DIR}`,
     `[ -f ~/${DIR}/config.env ] || cp ~/${DIR}/config.example.env ~/${DIR}/config.env`,
-    ...["token", "importer-token", "reviewer-token", "ah-tokens.json", "lidl-tokens.json"].map((f) => `{ [ ! -f ~/${DIR}/${f} ] || chmod 600 ~/${DIR}/${f}; }`),
+    ...["token", "importer-token", "reviewer-token", "ah-tokens.json", "lidl-tokens.json", "action-session.json", "kruidvat-session.json"].map((f) => `{ [ ! -f ~/${DIR}/${f} ] || chmod 600 ~/${DIR}/${f}; }`),
     `{ [ ! -d ~/${DIR}/ah-state ] || chmod 700 ~/${DIR}/ah-state; }`,
     `{ [ ! -d ~/${DIR}/lidl-state ] || chmod 700 ~/${DIR}/lidl-state; }`,
+    `{ [ ! -d ~/${DIR}/action-state ] || chmod 700 ~/${DIR}/action-state; }`,
+    `{ [ ! -d ~/${DIR}/kruidvat-state ] || chmod 700 ~/${DIR}/kruidvat-state; }`,
     `{ [ ! -d ~/${DIR}/review-state ] || chmod 700 ~/${DIR}/review-state; }`,
     ...(process.argv.includes("--cron")
       ? [`(crontab -l 2>/dev/null | grep -v '${DIR}/run.sh'; echo '${CRON}') | crontab -`]
       : []),
-    `echo installed; grep '^MODE=\\|^AH_MODE=\\|^LIDL_MODE=\\|^PRICES_MODE=\\|^REVIEW_MODE=' ~/${DIR}/config.env; (crontab -l 2>/dev/null | grep '${DIR}' || echo 'no crontab line')`,
+    `echo installed; grep '^MODE=\\|^AH_MODE=\\|^LIDL_MODE=\\|^ACTION_MODE=\\|^KRUIDVAT_MODE=\\|^PRICES_MODE=\\|^REVIEW_MODE=' ~/${DIR}/config.env; (crontab -l 2>/dev/null | grep '${DIR}' || echo 'no crontab line')`,
   ].join(" && ");
   process.stdout.write(run("ssh", ["-o", "BatchMode=yes", host, remote], { input: tarball }));
 

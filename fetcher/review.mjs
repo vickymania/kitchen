@@ -105,10 +105,10 @@ export function logErrors(tail) {
     .slice(-5);
 }
 
-/** The new purchases of today's AH and Lidl runs, each only when written in the last FRESH_HOURS. */
+/** The new purchases of today's AH, Lidl, Action and Kruidvat runs, each only when written in the last FRESH_HOURS. */
 export function newPurchases(home = HOME, now = Date.now()) {
   const parts = [];
-  for (const dir of ["ah-state", "lidl-state"]) {
+  for (const dir of ["ah-state", "lidl-state", "action-state", "kruidvat-state"]) {
     const file = path.join(home, dir, NEW_PURCHASES_FILE);
     let stat;
     try {
