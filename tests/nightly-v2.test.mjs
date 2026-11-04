@@ -214,8 +214,8 @@ test("report: a question with ids or names survives review.save and readReport; 
   assert.deepEqual(s.reviews[`review-${DAY}`].decide, ["Een vraag?", { text: "A en B samenvoegen?", ids: ["item-v2-aaaa", "item-v2-bbbb"], into: "item-v2-aaaa" }, { text: "Saus samenvoegen met Tomatensaus?", names: ["Saus", "Tomatensaus"] }]);
   assert.throws(() => applyOp(s, { type: "review.save", day: DAY, decide: [{ text: "x", ids: ["bad id!"] }] }, ctx()), (e) => e.code === "bad_id");
   const raw = JSON.stringify({ result: JSON.stringify({ run_ok: true, errors: [], fixed: [], decide: [{ text: "Saus samenvoegen met Tomatensaus?", names: ["Saus", "Tomatensaus"] }, "Klopt de prijs?"] }), num_turns: 3, total_cost_usd: 0.1 });
-  assert.deepEqual(readReport(raw).report.decide, [{ text: "Saus samenvoegen met Tomatensaus?", names: ["Saus", "Tomatensaus"] }, "Klopt de prijs?"]);
-  assert.equal(decideLine({ text: "x", names: ["Een"] }), "x", "one name is no merge question");
+  assert.deepEqual(readReport(raw).report.decide, [{ text: "Saus samenvoegen met Tomatensaus?", names: ["Saus", "Tomatensaus"] }], "a plain question has no buttons: dropped");
+  assert.equal(decideLine({ text: "x", names: ["Een"] }), "", "one name is no merge question: dropped");
 });
 
 // --------------------------------------------------------- the server

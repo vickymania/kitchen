@@ -48,7 +48,7 @@ export const OP_TYPES = [
   "item.merge", "product.move", "item.alias", "item.private",
   "prices.sync",
   "review.save", "recipe.links",
-  "item.unmerge", "item.remove", "item.unremove", "change.undo", "item.apart", "recipe.link_fix",
+  "item.unmerge", "item.remove", "item.unremove", "change.undo", "item.apart", "product.keep", "recipe.link_fix",
   "item.translate", "recipe.translate",
 ];
 
@@ -93,6 +93,12 @@ function decideLines(v) {
     const ids = list(x.ids, (i) => id(i, "decide.ids"));
     const names = list(x.names, (n) => text(n, 120, "decide.names"))?.filter(Boolean);
     const into = x.into === undefined || x.into === null ? undefined : id(x.into, "decide.into");
+    // A move question: { text, product_id, items: [2..3 item names] } gets one button per item and "Laat staan".
+    if (x.product_id !== undefined && x.product_id !== null) {
+      const items = list(x.items, (n) => text(n, 120, "decide.items"))?.filter(Boolean);
+      if (!(items?.length > 1)) return line;
+      return { text: line, product_id: id(x.product_id, "decide.product_id"), items: items.slice(0, 3) };
+    }
     if (!ids?.length && !(names?.length > 1)) return line;
     return { text: line, ...(ids?.length ? { ids } : {}), ...(names?.length ? { names } : {}), ...(into ? { into } : {}) };
   }).filter(Boolean);
@@ -2427,6 +2433,23 @@ const HANDLERS = {
     if (names.length < 2) throw new OpError("bad_field", "names");
     let n = 0;
     for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++, n++) putDecision(state, ctx, "apart", names[i], names[j]);
+    return { decisions: n };
+  },
+
+  // "Laat staan" on a move question (04-11-2026: "Moet dit bij
+  // Frisdrank of pepsi?" had no buttons): { product_id, item_ids } stays where
+  // it is. Decision no_move for the product and each of those items it is not
+  // on, so the nightly check never moves it there and never asks again.
+  "product.keep"(state, op, ctx) {
+    const p = liveProduct(state, op.product_id);
+    if (!Array.isArray(op.item_ids) || !op.item_ids.length || op.item_ids.length > 12) throw new OpError("bad_field", "item_ids");
+    let n = 0;
+    for (const itemId of op.item_ids) {
+      const item = aliasTarget(state.items, state.items[id(itemId, "item_ids")]);
+      if (!item) throw new OpError("not_found", "item");
+      if (item.id === p.item_id) continue;
+      if (putDecision(state, ctx, "no_move", p.id, item.id, p.name, item.name)) n++;
+    }
     return { decisions: n };
   },
 

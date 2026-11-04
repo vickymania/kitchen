@@ -421,7 +421,12 @@
     "merged_into": "Merged into {target}",
     "kept_apart": "Kept apart",
     "cleaned_up": "Cleaned up",
-    "pick_two": "Pick at least two."
+    "pick_two": "Pick at least two.",
+    "move_to": "To {item}",
+    "move_keep": "Leave it",
+    "moved_to": "Moved to {target}",
+    "kept_put": "Left as it is",
+    "stays_at": "Now at {target}"
   },
   "prices": { "label": "Prices", "of": "prices of {day}", "comparable": "comparable", "missing_here": {"one": "1 line without a price here", "other": "{n} lines without a price here"}, "for_lines": "{n} of {total} lines" },
   "cooked": {

@@ -323,6 +323,14 @@ async function load(db, hh, op, memberId) {
       await loadDecisions(db, hh, s, pairs);
       break;
     }
+    case "product.keep": {
+      const pid = String(op.product_id);
+      await loadInto(db, hh, s, "products", "id = ?", pid);
+      const ids = Array.isArray(op.item_ids) ? op.item_ids.slice(0, 12).map(String) : [];
+      await loadIds(db, hh, s, "items", ids);
+      await loadDecisions(db, hh, s, ids.map((x) => ["no_move", pid, x]));
+      break;
+    }
     case "recipe.link_fix":
       await loadInto(db, hh, s, "recipes", "id = ?", String(op.recipe_id));
       await loadItems(db, hh, s, "id = ?", String(op.item_id));

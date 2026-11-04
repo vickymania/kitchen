@@ -19,7 +19,7 @@ import { readSent, vocabulary, OTHER_PEOPLE_CITIES } from "../tools/import_ah.mj
 import {
   actionKind, actionDay, buildActionOps, initState, normaliseActionReceipt, runReceipts, splitActionName, TITLES_FILE,
 } from "../fetcher/action_import.mjs";
-import { ActionAuthError, ActionQueryError, QUERIES, createActionClient, receiptFields } from "../fetcher/action_client.mjs";
+import { ActionAuthError, ActionQueryError, QUERIES, createActionClient, errorKind, receiptFields } from "../fetcher/action_client.mjs";
 import { actionSession, checkActionSession, isActionLogin } from "../fetcher/action-login.mjs";
 import { applySetCookies, cookieHeader, parseSetCookie } from "../fetcher/cookie_session.mjs";
 import { describeSession, finishSessionLogin } from "../fetcher/browser_login.mjs";
@@ -321,4 +321,9 @@ test("run.sh: Action runs after Lidl, ACTION_MODE defaults to dry-run, the serve
   for (const f of ["fetcher/action-login.mjs", "fetcher/browser_login.mjs"]) assert.ok(!deploy.includes(`["${f}"`), `${f} stays on the PC`);
   assert.ok(deploy.includes('"action-session.json"'), "its mode is kept at 600");
   assert.match(fs.readFileSync(path.join(ROOT, "fetcher/review.mjs"), "utf8"), /"action-state"/, "the nightly check reads its new purchases");
+});
+
+test("errorKind: Action's USER_LOGGED_OUT is an expired session, so the client refreshes", () => {
+  assert.equal(errorKind([{ message: "USER_LOGGED_OUT" }]), "auth");
+  assert.equal(errorKind([{ message: "x", extensions: { code: "USER_LOGGED_OUT" } }]), "auth");
 });

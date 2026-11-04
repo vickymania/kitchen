@@ -383,22 +383,40 @@ const list = (v) => (Array.isArray(v) ? v.map(clip).filter(Boolean).slice(0, REV
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /**
- * One question of the report: a line, or a merge question { text, names }
- * (Claude's: the items by name) or { text, ids, into } (the rules'), which
- * the app answers with "Samenvoegen" / "Apart houden".
+ * One question of the report, always with buttons in the app (Thomas,
+ * 04-11-2026: a plain question had "no buttons, so I can do nothing with
+ * it"). Two shapes: a merge question { text, names } (Claude's: the items by
+ * name) or { text, ids, into } (the rules'), answered with "Samenvoegen" /
+ * "Apart houden"; a move question { text, product_id, items: [2-3 item
+ * names] }, one button per item plus "Laat staan". A plain string or a
+ * malformed object gives "" (the caller drops it and logs it).
  */
 export function decideLine(v) {
-  if (typeof v === "string") return clip(v);
-  if (!v || typeof v !== "object") return "";
+  if (!v || typeof v !== "object" || Array.isArray(v)) return "";
   const text = clip(v.text);
   if (!text) return "";
+  if (v.product_id !== undefined && v.product_id !== null) {
+    const items = Array.isArray(v.items) ? [...new Set(v.items.map((n) => clip(n).slice(0, 120)).filter(Boolean))] : [];
+    if (typeof v.product_id !== "string" || !ID.test(v.product_id) || items.length < 2 || items.length > 3) return "";
+    return { text, product_id: v.product_id, items };
+  }
   const ids = Array.isArray(v.ids) ? v.ids.filter((x) => typeof x === "string" && ID.test(x)).slice(0, 12) : [];
   const names = Array.isArray(v.names ?? v.merge) ? (v.names ?? v.merge).map((n) => clip(n).slice(0, 120)).filter(Boolean).slice(0, 12) : [];
   if (ids.length > 1) return { text, ids, ...(typeof v.into === "string" && ID.test(v.into) ? { into: v.into } : {}) };
   if (names.length > 1) return { text, names };
-  return text;
+  return "";
 }
-const decideList = (v) => (Array.isArray(v) ? v.map(decideLine).filter(Boolean).slice(0, REVIEW_MAX_LINES) : []);
+/** Claude's questions: the ones without buttons are dropped and logged. */
+const decideList = (v) => {
+  if (!Array.isArray(v)) return [];
+  const out = [];
+  for (const q of v) {
+    const line = decideLine(q);
+    if (line) out.push(line);
+    else log(`dropped a question without buttons: ${JSON.stringify(q)?.slice(0, 200)}`);
+  }
+  return out.slice(0, REVIEW_MAX_LINES);
+};
 
 /** Claude Code's own words when its login is gone (expired or revoked): "Please run /login", "OAuth token has expired"... */
 export const AUTH_FAILED = /\/login\b|not logged in|log in again|invalid api key|oauth token|authentication_error|unauthori[sz]ed|\b401\b/i;

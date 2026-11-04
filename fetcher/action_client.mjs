@@ -65,7 +65,8 @@ export function errorKind(errors) {
     const code = String(e?.extensions?.code ?? "");
     const msg = String(e?.message ?? "");
     if (code === "PERSISTED_QUERY_NOT_FOUND" || /PersistedQueryNotFound/i.test(msg)) return "persisted";
-    if (/UNAUTHENTICATED|UNAUTHORI[SZ]ED|FORBIDDEN/i.test(code) || /unauthori[sz]ed|unauthenticated|not (logged|signed) in|login required/i.test(msg)) return "auth";
+    // Action says USER_LOGGED_OUT when the access cookie expired (seen 04-11-2026).
+    if (/UNAUTHENTICATED|UNAUTHORI[SZ]ED|FORBIDDEN|LOGGED_OUT/i.test(code) || /unauthori[sz]ed|unauthenticated|not (logged|signed) in|logged.?out|login required/i.test(msg)) return "auth";
   }
   return null;
 }

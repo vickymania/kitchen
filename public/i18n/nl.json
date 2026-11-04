@@ -421,7 +421,12 @@
     "merged_into": "Samengevoegd in {target}",
     "kept_apart": "Apart gehouden",
     "cleaned_up": "Opgeruimd",
-    "pick_two": "Kies er minstens twee."
+    "pick_two": "Kies er minstens twee.",
+    "move_to": "Naar {item}",
+    "move_keep": "Laat staan",
+    "moved_to": "Verplaatst naar {target}",
+    "kept_put": "Blijft staan",
+    "stays_at": "Staat bij {target}"
   },
   "prices": { "label": "Prijzen", "of": "prijzen van {day}", "comparable": "vergelijkbaar", "missing_here": {"one": "1 regel zonder prijs hier", "other": "{n} regels zonder prijs hier"}, "for_lines": "{n} van {total} regels" },
   "cooked": {

@@ -14,7 +14,11 @@
 // plus another name for the item), and every merge question in "Beslis jij"
 // "Samenvoegen" (item.merge from this device, into the clean name) and
 // "Apart houden" (item.apart: never asked again), with a pick of the names
-// when there are more than two.
+// when there are more than two. A move question ({ text, product_id, items })
+// has one button per item ("Naar Frisdrank": product.move, which also brings
+// along purchases of that product sitting on other items) and "Laat staan"
+// (product.keep: the nightly check never moves it there or asks again; the
+// buttons also record this, which is how the question counts as answered).
 import { h, sheet, toast, newId } from "./dom.js";
 import { t, formatDate } from "./i18n.js";
 import * as store from "./store.js";
@@ -208,12 +212,68 @@ function markSeen(r) {
 }
 
 /**
+ * Where a move question stands: the live items it names, and "gone" (the
+ * product or every item is gone), "decided" (a button was pressed: product.keep
+ * left a no_move decision for the product and an item it is not on; `at` is
+ * the listed item the product and all that was bought of it now sit on, else
+ * null) or "open". Position alone never counts as an answer: the product
+ * may well sit on one of the named items when it is asked.
+ */
+function moveState(view, d) {
+  const product = view.products?.[d.product_id] && !view.products[d.product_id].deleted_at ? view.products[d.product_id] : null;
+  const items = [];
+  for (const name of d.items ?? []) {
+    const item = itemNamed(view, name);
+    if (item && !items.some((i) => i.id === item.id)) items.push(item);
+  }
+  if (!product || !items.length) return { items, product, status: "gone" };
+  const { noMove } = decisionSets(view.decisions);
+  if (!items.some((i) => noMove.has(`${product.id}|${i.id}`))) return { items, product, status: "open" };
+  const homes = new Set([product.item_id, ...Object.values(view.purchases ?? {}).filter((r) => r.product_id === product.id && !r.deleted_at).map((r) => r.item_id)]);
+  return { items, product, status: "decided", at: homes.size === 1 ? items.find((i) => homes.has(i.id)) ?? null : null };
+}
+
+/** A move question's buttons: one per item and "Laat staan". */
+function moveItem(view, d, q) {
+  const slot = h("div", { class: "decide-acts" });
+  const li = h("li", {}, h("span", {}, d.text), slot);
+  const say = (key, args) => slot.replaceChildren(h("small", { class: "undone mono" }, t(key, args)));
+  if (q.status === "decided") q.at ? say("review.stays_at", { target: q.at.name }) : say("review.kept_put");
+  else if (q.status === "gone") say("review.cleaned_up");
+  else {
+    const move = async (item) => {
+      try {
+        await store.dispatch({ type: "product.move", product_id: d.product_id, item_id: item.id, on: today() });
+        // The answer, kept for the other devices and so the check never moves it elsewhere.
+        await store.dispatch({ type: "product.keep", product_id: d.product_id, item_ids: q.items.map((i) => i.id) });
+        say("review.moved_to", { target: item.name });
+      } catch (err) {
+        refused(err);
+      }
+    };
+    const keep = async () => {
+      try {
+        await store.dispatch({ type: "product.keep", product_id: d.product_id, item_ids: q.items.map((i) => i.id) });
+        say("review.kept_put");
+      } catch (err) {
+        refused(err);
+      }
+    };
+    slot.append(h("div", { class: "decide-buttons" },
+      q.items.map((item, i) => h("button", { type: "button", class: `btn small${i === 0 ? " primary" : ""}`, onclick: () => move(item) }, t("review.move_to", { item: item.name }))),
+      h("button", { type: "button", class: "btn small ghost", onclick: keep }, t("review.move_keep"))));
+  }
+  return li;
+}
+
+/**
  * Where a merge question stands on this phone: the names it asks about with
  * their live items, and "merged" (fewer than two live items left), "apart"
  * (every pair kept apart) or "open".
  */
 export function questionState(view, d) {
   if (!d || typeof d !== "object") return null;
+  if (d.product_id) return moveState(view, d);
   const asked = d.ids?.length
     ? d.ids.map((id) => ({ id, item: view.items?.[id] && !view.items[id].deleted_at ? view.items[id] : null }))
     : (d.names ?? []).map((name) => ({ id: null, item: itemNamed(view, name), name }));
@@ -246,6 +306,7 @@ async function mergeChosen(view, d, chosen, left) {
 function decideItem(view, d) {
   const q = questionState(view, d);
   if (!q) return h("li", {}, d);
+  if (d.product_id) return moveItem(view, d, q);
   const slot = h("div", { class: "decide-acts" });
   const li = h("li", {}, h("span", {}, d.text), slot);
   if (q.status !== "open") {

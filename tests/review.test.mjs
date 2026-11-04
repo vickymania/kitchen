@@ -240,10 +240,10 @@ test("prepare: the log tail and today's new purchases go into the prompt, once a
 const result = (obj) => JSON.stringify({ type: "result", subtype: "success", is_error: false, num_turns: 9, total_cost_usd: 0.183, result: `Klaar.\n${JSON.stringify(obj)}` });
 
 test("readReport: claude's answer becomes the report; every failure says why, a lost login how to log in again", () => {
-  const good = readReport(result({ run_ok: true, errors: [], fixed: [{ text: "Tonijn in water staat nu bij Minoestuna.", undo: "Terug: Tonijn." }], decide: ["Saus? samenvoegen met Calvé saus?"] }));
+  const good = readReport(result({ run_ok: true, errors: [], fixed: [{ text: "Tonijn in water staat nu bij Minoestuna.", undo: "Terug: Tonijn." }], decide: [{ text: "Saus? samenvoegen met Calvé saus?", names: ["Saus?", "Calvé saus"] }] }));
   assert.equal(good.ok, true);
   assert.deepEqual(good.meta, { turns: 9, cost_usd: 0.183, subtype: "success" });
-  assert.deepEqual(good.report.decide, ["Saus? samenvoegen met Calvé saus?"]);
+  assert.deepEqual(good.report.decide, [{ text: "Saus? samenvoegen met Calvé saus?", names: ["Saus?", "Calvé saus"] }]);
   assert.match(reportText("2026-10-30", good.report), /Opgelost:\n- Tonijn in water staat nu bij Minoestuna\. \(Terug: Tonijn\.\)\nBeslissen:/);
   const op = reviewOp("2026-10-30", good.report, good.meta);
   assert.deepEqual([op.type, op.day, op.turns, op.cost_cents], ["review.save", "2026-10-30", 9, 18]);
@@ -282,7 +282,7 @@ test("save: a report, a lost login and a timeout all reach the app through the r
     return save({ exitCode, home, stateDir, today: day, origin: ORIGIN, post, token: reviewer, say });
   };
 
-  const ok = await run("2026-10-28", result({ run_ok: true, fixed: [], decide: ["Saus? samenvoegen met Calvé saus?"] }), 0);
+  const ok = await run("2026-10-28", result({ run_ok: true, fixed: [], decide: [{ text: "Saus? samenvoegen met Calvé saus?", names: ["Saus?", "Calvé saus"] }] }), 0);
   assert.equal(ok.ok, true);
   const expired = await run("2026-10-29", JSON.stringify({ is_error: true, result: "Not logged in · Please run /login" }), 1);
   assert.equal(expired.failure, "auth");
@@ -291,7 +291,7 @@ test("save: a report, a lost login and a timeout all reach the app through the r
 
   const all = await (await call(env, "GET", "/api/sync?since=0", { cookie: thomas })).json();
   const byDay = Object.fromEntries(all.reviews.map((r) => [r.day, r]));
-  assert.deepEqual(byDay["2026-10-28"].decide, ["Saus? samenvoegen met Calvé saus?"]);
+  assert.deepEqual(byDay["2026-10-28"].decide, [{ text: "Saus? samenvoegen met Calvé saus?", names: ["Saus?", "Calvé saus"] }]);
   assert.equal(byDay["2026-10-29"].decide[0], "Claude op je server moet opnieuw inloggen.");
   assert.equal(byDay["2026-10-30"].decide[0], "Nachtcontrole is niet gelukt: het duurde te lang.");
   assert.match(fs.readFileSync(path.join(stateDir, "last.txt"), "utf8"), /^Nachtcontrole 2026-10-30\nRun: goed\nBeslissen:\n- Nachtcontrole is niet gelukt/);
