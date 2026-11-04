@@ -506,7 +506,7 @@ function lowPreview(name, typed, off, left) {
   return `${t("low.preview_set", { name, low_at: typed })} ${now}${under ? ` ${t("low.preview_low_now")}` : ""}`;
 }
 
-/** "Waarschuw onder…": the item's threshold, or never. */
+/** "Waarschuwen": the item's threshold, or never. */
 async function lowSheet(r) {
   const view = store.getView();
   const item = view.items[r.item_id];

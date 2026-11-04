@@ -496,7 +496,7 @@
     "below_default": "minder dan ¼ pak",
     "empty_today": "vandaag op",
     "empty_ago": { "one": "gisteren op", "other": "{n} dagen geleden op" },
-    "set": "Waarschuw onder…",
+    "set": "Waarschuwen",
     "set_at": "Waarschuw onder {low_at}",
     "set_off": "Nooit waarschuwen",
     "sheet_title": "Bijna op: {name}",

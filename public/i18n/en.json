@@ -496,7 +496,7 @@
     "below_default": "under ¼ pack",
     "empty_today": "ran out today",
     "empty_ago": { "one": "ran out yesterday", "other": "ran out {n} days ago" },
-    "set": "Warn below…",
+    "set": "Warn me",
     "set_at": "Warn below {low_at}",
     "set_off": "Never warn",
     "sheet_title": "Running low: {name}",
