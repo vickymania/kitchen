@@ -378,6 +378,21 @@ function clearBasketFor(state, ctx, item, boughtOn, except = null) {
 }
 
 /**
+ * A receipt purchase that lands on an item later (item.merge, product.move,
+ * a wrong guess fixed): it confirms the target's basket line like
+ * purchase.add does, with the same window around its own day. Returns the
+ * cleared ids. Only receipts; the history source and deleted rows never.
+ */
+function clearBasketForMoved(state, ctx, target, purchases) {
+  const cleared = [];
+  for (const row of purchases) {
+    if (!row || row.deleted_at || row.source !== "receipt" || !row.bought_on) continue;
+    cleared.push(...clearBasketFor(state, ctx, target, row.bought_on));
+  }
+  return cleared;
+}
+
+/**
  * Was the item on the list around `day`: an open line of it, or a checked
  * line of the same thing ticked in clearBasketFor's window (the lines the
  * purchase.add loader fetches)? Then a receipt of it is no rebuy.
@@ -2197,6 +2212,8 @@ const HANDLERS = {
         moved[kind]++;
       }
     }
+    // The receipts that moved confirm into's basket line (as purchase.add).
+    const basketCleared = clearBasketForMoved(state, ctx, into, (rec.rows.purchases ?? []).map((pid) => state.purchases[pid]));
     for (const e of Object.values(state.entries)) {
       if (e.item_id !== from.id || e.deleted_at) continue;
       const open = e.checked_at ? null : openEntryFor(state, into.id);
@@ -2237,7 +2254,7 @@ const HANDLERS = {
     const aliasBefore = old ? { item_id: old.item_id, name: old.name, name_key: old.name_key, deleted_at: old.deleted_at ?? null } : null;
     rec.alias = { id: putAlias(state, ctx, into, from.name, `ma-${from.id}`), before: aliasBefore };
     from.undo_rows = rec;
-    return { item_id: into.id, moved };
+    return basketCleared.length ? { item_id: into.id, moved, cleared: basketCleared } : { item_id: into.id, moved };
   },
 
   // A merge undone (30-10-2026: "Terugdraaien" on every line of the
@@ -2521,13 +2538,17 @@ const HANDLERS = {
       ctx.touch("products", p.id);
       moved.products++;
     }
+    const movedPurchases = [];
     for (const kind of ["purchases", "pantry", "pantry_events"]) {
       for (const row of Object.values(state[kind])) {
         if (!mine(row)) continue;
         moveRow(ctx, kind, row, target);
         moved[kind]++;
+        if (kind === "purchases") movedPurchases.push(row);
       }
     }
+    // The receipts that moved confirm the target's basket line (as purchase.add).
+    const basketCleared = clearBasketForMoved(state, ctx, target, movedPurchases);
     for (const row of Object.values(state.preferences)) {
       if (!mine(row)) continue;
       moved.preferences += moveScopedRow(ctx, "preferences", row, scopeRow(state, target.id, row.store, row.recipe_id), target, PREFERENCE_COPY);
@@ -2536,7 +2557,7 @@ const HANDLERS = {
       if (!mine(row)) continue;
       moved.deal_rules += moveScopedRow(ctx, "deal_rules", row, ruleRow(state, target.id, p.id), target, Object.keys(RULE_FIELDS));
     }
-    return { item_id: target.id, moved };
+    return basketCleared.length ? { item_id: target.id, moved, cleared: basketCleared } : { item_id: target.id, moved };
   },
 
   // Another name for an item (30-10-2026: "Pluizenbolbrokkenman" is

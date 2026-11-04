@@ -201,6 +201,18 @@ async function loadRowProducts(db, hh, s) {
   await loadIds(db, hh, s, "products", Object.values(s.pantry).map((r) => r.product_id));
 }
 
+/**
+ * The basket lines a moved receipt may clear (clearBasketForMoved, as the
+ * purchase.add loader): the checked, live lines ticked around the days of the
+ * given receipt purchases. One range from the first day to the last.
+ */
+async function loadBasketForMoved(db, hh, s, purchases) {
+  const days = purchases.filter((r) => r && !r.deleted_at && r.source === "receipt" && /^\d{4}-\d{2}-\d{2}$/.test(String(r.bought_on))).map((r) => r.bought_on).sort();
+  if (!days.length) return;
+  await loadInto(db, hh, s, "entries", "checked_at IS NOT NULL AND deleted_at IS NULL AND checked_at >= ? AND checked_at < ?",
+    addDays(days[0], -BASKET_BEFORE_DAYS), addDays(days[days.length - 1], BASKET_AFTER_DAYS + 1));
+}
+
 /** The "… gekookt?" rows of the loaded lines' recipes around `day` (a few). */
 async function loadPrompts(db, hh, s, day, entries) {
   const recipes = new Set();
@@ -451,6 +463,7 @@ async function load(db, hh, op, memberId) {
         await loadInto(db, hh, s, "preferences", "item_id = ?", itemId);
         await loadInto(db, hh, s, "deal_rules", "item_id = ?", itemId);
       }
+      await loadBasketForMoved(db, hh, s, Object.values(s.purchases).filter((r) => r.item_id === fromId));
       // An open line of the from-item merges into into's open line.
       if (into) await loadInto(db, hh, s, "entries", "item_id = ? AND checked_at IS NULL AND deleted_at IS NULL", into.id);
       // Its other names go along; its own name becomes an alias row.
@@ -472,6 +485,7 @@ async function load(db, hh, op, memberId) {
       }
       await loadInto(db, hh, s, "preferences", "product_id = ?", pid);
       await loadInto(db, hh, s, "deal_rules", "product_id = ?", pid);
+      await loadBasketForMoved(db, hh, s, Object.values(s.purchases));
       const target = titled ? findItem(s, nameKey(op.title)) : aliasTarget(s.items, s.items[op.item_id]);
       // The items its rows are on now and the target: settled first, so all their live rows.
       const itemIds = [...new Set([s.products[pid]?.item_id, ...Object.values(s.purchases).map((r) => r.item_id),

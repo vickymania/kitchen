@@ -109,3 +109,77 @@ test("on D1: the import's purchase clears the basket line every phone then pulls
   assert.deepEqual(again.results.filter((r) => !r.ok), []);
   assert.deepEqual(await rows(), { "entry-rb-d1melk": true, "entry-rb-d1eier": true, "entry-rb-d1open": false });
 });
+
+// Fixed later (04-11-2026): a receipt that landed on the wrong item and is
+// merged or moved confirms the target's basket line, like purchase.add.
+const opCtx = ctx(DAY, "19");
+const bought = (s, id, itemId, title, opts = {}) => applyOp(s, {
+  type: "purchase.add", id, source: "receipt", title, bought_on: DAY, item_id: itemId, ...opts,
+}, ctx(DAY, "18"));
+
+test("item.merge: the moved receipt clears the target's checked line in the window, not outside it", () => {
+  const s = emptyState();
+  line(s, "entry-rb-mrg001", "Gezichtsreiniger", DAY);
+  line(s, "entry-rb-mrg002", "Gezichtsreiniger", addDays(DAY, -BASKET_BEFORE_DAYS - 3));
+  const into = s.entries["entry-rb-mrg001"].item_id;
+  bought(s, "purchase-rb-mrg1", "item-rb-mrgnew", "Gezichtsreiniger gel");
+  assert.ok(!gone(s, "entry-rb-mrg001"));
+  const out = applyOp(s, { type: "item.merge", from_item_id: "item-rb-mrgnew", into_item_id: into, on: DAY }, opCtx).result;
+  assert.ok(out.cleared.includes("entry-rb-mrg001"));
+  assert.ok(gone(s, "entry-rb-mrg001"));
+  assert.ok(!gone(s, "entry-rb-mrg002"), "ticked weeks before: untouched");
+});
+
+test("product.move: the moved receipt clears the target's checked line; a history purchase does not", () => {
+  const s = emptyState();
+  line(s, "entry-rb-mov001", "Minoes brokken", DAY);
+  line(s, "entry-rb-mov002", "Kippenborst", DAY);
+  const target = s.entries["entry-rb-mov001"].item_id;
+  bought(s, "purchase-rb-mov1", "item-rb-wrong1", "Minoes eten", { product: { id: "product-rb-whiskas", name: "Whiskas brokken" } });
+  assert.ok(!gone(s, "entry-rb-mov001"));
+  const out = applyOp(s, { type: "product.move", product_id: "product-rb-whiskas", item_id: target, on: DAY }, opCtx).result;
+  assert.deepEqual(out.cleared, ["entry-rb-mov001"]);
+  assert.ok(gone(s, "entry-rb-mov001"));
+  assert.ok(!gone(s, "entry-rb-mov002"), "another thing stays");
+  // A purchase that is no receipt (the old history) does not clear.
+  line(s, "entry-rb-mov003", "Kattenbak", DAY);
+  bought(s, "purchase-rb-mov2", "item-rb-wrong2", "Oud", { product: { id: "product-rb-oud", name: "Oud" } });
+  s.purchases["purchase-rb-mov2"].source = "history";
+  applyOp(s, { type: "product.move", product_id: "product-rb-oud", item_id: s.entries["entry-rb-mov003"].item_id, on: DAY }, opCtx);
+  assert.ok(!gone(s, "entry-rb-mov003"));
+});
+
+test("on D1: merge and product.move clear the basket line (the loader fetches it)", async () => {
+  const HOST = "groceries.localhost:8787";
+  const env = await makeEnv();
+  await env.DB.exec(await bootstrapSql({ household: "Thuis", name: "Thomas", code: "123456" }));
+  const res = await worker.fetch(new Request(`http://${HOST}/api/pair`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: `http://${HOST}` }, body: JSON.stringify({ code: "123456", label: "test" }),
+  }), env);
+  const token = res.headers.getSetCookie().map((c) => c.match(/^kd=([^;]+)/)?.[1]).find(Boolean);
+  const send = async (ops) => (await worker.fetch(new Request(`http://${HOST}/api/ops`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ ops }),
+  }), env)).json();
+  const today = new Date().toISOString().slice(0, 10);
+  let n = 0;
+  const op = (o) => ({ op_id: `op-rb-mv-${String(++n).padStart(5, "0")}`, ...o });
+  const ok = async (ops) => { const out = await send(ops); assert.deepEqual(out.results.filter((r) => !r.ok), []); };
+  await ok([
+    op({ type: "entry.add", id: "entry-rb-mvcat", item_id: "item-rb-mvcat", title: "Minoes brokken" }),
+    op({ type: "entry.check", id: "entry-rb-mvcat", checked: true }),
+    op({ type: "entry.add", id: "entry-rb-mvface", item_id: "item-rb-mvface", title: "Gezichtsreiniger" }),
+    op({ type: "entry.check", id: "entry-rb-mvface", checked: true }),
+    op({ type: "entry.add", id: "entry-rb-mvkeep", item_id: "item-rb-mvkeep", title: "Brood" }),
+    op({ type: "entry.check", id: "entry-rb-mvkeep", checked: true }),
+    op({ type: "receipt.save", id: "receipt-rb-mv-01", store: "AH", bought_on: today, lines: [] }),
+    op({ type: "purchase.add", id: "purchase-rb-mv01", source: "receipt", receipt_id: "receipt-rb-mv-01", title: "Minoes eten", bought_on: today, item_id: "item-rb-mvwrong", product: { id: "product-rb-mvwhis", name: "Whiskas brokken" } }),
+    op({ type: "purchase.add", id: "purchase-rb-mv02", source: "receipt", receipt_id: "receipt-rb-mv-01", title: "Gezichtsreiniger gel", bought_on: today, item_id: "item-rb-mvgel" }),
+  ]);
+  const rows = async () => Object.fromEntries((await env.DB.prepare("SELECT id, deleted_at FROM list_entries").all()).results.map((r) => [r.id, Boolean(r.deleted_at)]));
+  assert.deepEqual(await rows(), { "entry-rb-mvcat": false, "entry-rb-mvface": false, "entry-rb-mvkeep": false });
+  await ok([
+    op({ type: "product.move", product_id: "product-rb-mvwhis", item_id: "item-rb-mvcat", on: today }),
+    op({ type: "item.merge", from_item_id: "item-rb-mvgel", into_item_id: "item-rb-mvface", on: today }),
+  ]);
+  assert.deepEqual(await rows(), { "entry-rb-mvcat": true, "entry-rb-mvface": true, "entry-rb-mvkeep": false });
+});
