@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An "Al nodig?" row's circle without an offer (1.7): ink, as the web's .box; check_ring is the deal colour. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <stroke android:width="2dp" android:color="@color/ink" />
+    <size android:width="22dp" android:height="22dp" />
+</shape>

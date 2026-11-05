@@ -15,7 +15,7 @@ object LineText {
             line.product != null -> parts.add("→ ${productName(line.product)}")
         }
         if (line.note.isNotBlank()) parts.add(line.note)
-        line.offer?.let { parts.add(context.getString(R.string.offer_tag, "${shortStore(it.store)} ${it.deal}".trim())) }
+        line.offer?.let { parts.add(offerTag(context, it)) }
         return parts.joinToString(" · ")
     }
 
@@ -37,6 +37,10 @@ object LineText {
         if (recipes.isNotEmpty()) out.add(context.getString(R.string.for_recipes, recipes.joinToString(", ")))
         return out.joinToString("\n")
     }
+
+    /** The offer tag of a collapsed line and (1.7) of an "Al nodig?" row: "% AH 2e halve prijs". */
+    fun offerTag(context: Context, offer: ListState.Offer): String =
+        context.getString(R.string.offer_tag, "${shortStore(offer.store)} ${offer.deal}".trim())
 
     private fun productName(p: ListState.Product) = listOf(p.brand, p.name).filter { it.isNotBlank() }.joinToString(" ")
 

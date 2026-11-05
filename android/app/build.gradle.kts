@@ -11,8 +11,8 @@ android {
         applicationId = "works.vexed.groceries"
         minSdk = 31
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.6.0"
+        versionCode = 8
+        versionName = "1.7.0"
     }
 
     buildTypes {

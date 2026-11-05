@@ -7,7 +7,7 @@
 import { fromRow } from "./ops-store.js";
 import { resolveProduct, lastPrice, purchasesByProduct } from "../public/shared/preferences.js";
 import { currentOffers, lineOffers, isExcludedOffer, isCoupon, brandedName } from "../public/shared/offers.js";
-import { isRegularStore } from "../public/shared/deals.js";
+import { isRegularStore, soonOffers } from "../public/shared/deals.js";
 import { isExcluded } from "../public/shared/excluded.js";
 import { groupByStore, lineStore } from "../public/shared/list-groups.js";
 import { neededSoon, notYetOp, tickEntry } from "../public/shared/needed-soon.js";
@@ -19,7 +19,6 @@ import { hiddenStatement, hiddenOf, rowHidden } from "./privacy.js";
 
 const OPEN = "household_id = ? AND checked_at IS NULL AND deleted_at IS NULL";
 const OPEN_ITEMS = `SELECT item_id FROM list_entries WHERE ${OPEN} AND item_id IS NOT NULL`;
-const LIVE_PREFS = `household_id = ? AND deleted_at IS NULL AND item_id IN (${OPEN_ITEMS})`;
 // "Al nodig?" (public/shared/needed-soon.js): the pantry rows with something
 // left, the pantry events, the lines in the basket (on the list too, so not a
 // hint), the items those and the open lines name, and the live recipes'
@@ -30,6 +29,30 @@ const BASKET = "household_id = ? AND checked_at IS NOT NULL AND deleted_at IS NU
 const LIVE_ITEMS = "SELECT item_id FROM list_entries WHERE household_id = ? AND deleted_at IS NULL AND item_id IS NOT NULL";
 const SOON_ITEMS = `household_id = ? AND deleted_at IS NULL AND (id IN (SELECT item_id FROM pantry WHERE ${STOCK})
   OR id IN (SELECT item_id FROM pantry_events WHERE ${EVENTS}) OR id IN (${LIVE_ITEMS}))`;
+// The preferences and products of the open lines and (1.7) of the items an
+// "Al nodig?" row can be: his product's offer comes first there too.
+const LIVE_PREFS = `household_id = ? AND deleted_at IS NULL AND (item_id IN (${OPEN_ITEMS})
+  OR item_id IN (SELECT item_id FROM pantry WHERE ${STOCK}) OR item_id IN (SELECT item_id FROM pantry_events WHERE ${EVENTS}))`;
+const PREF_BINDS = 4;
+
+/**
+ * The one offer the widget shows for a line or an "Al nodig?" row: his own
+ * product on offer anywhere, else something with its name at AH or Dirk;
+ * never an excluded one. In the widget's shape, or null.
+ */
+function shownOffer(mine, named) {
+  const offer = mine[0] ?? named.find((o) => isRegularStore(o.store)) ?? null;
+  if (!offer || isExcludedOffer(offer)) return null;
+  return {
+    store: offer.store,
+    name: [offer.brand, offer.name].filter(Boolean).join(" "),
+    // A Lidl Plus coupon says so in the deal text: the widget's payload keeps its shape.
+    deal: [isCoupon(offer) ? "Lidl Plus-coupon" : null, offer.deal].filter(Boolean).join(" · "),
+    price_cents: offer.price_cents ?? null,
+    until: offer.valid_until,
+    mine: mine.includes(offer),
+  };
+}
 
 const byId = (rows, kind) => Object.fromEntries(rows.map((r) => [r.id, fromRow(kind, r)]));
 
@@ -46,9 +69,9 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
   if (since > 0 && (head?.rev ?? 0) <= since) return { rev: head?.rev ?? 0, unchanged: true };
   const [rawEntries, rawPreferences, rawProducts, rawPurchases, rawOffers, rawPantry, rawEvents, rawItems, recipes, rawBasket, hiddenRows] = await db.batch([
     db.prepare(`SELECT * FROM list_entries WHERE ${OPEN}`).bind(hh),
-    db.prepare(`SELECT * FROM preferences WHERE ${LIVE_PREFS}`).bind(hh, hh),
+    db.prepare(`SELECT * FROM preferences WHERE ${LIVE_PREFS}`).bind(...Array(PREF_BINDS).fill(hh)),
     db.prepare(`SELECT * FROM products WHERE household_id = ? AND deleted_at IS NULL
-      AND id IN (SELECT product_id FROM preferences WHERE ${LIVE_PREFS})`).bind(hh, hh, hh),
+      AND id IN (SELECT product_id FROM preferences WHERE ${LIVE_PREFS})`).bind(...Array(PREF_BINDS + 1).fill(hh)),
     // The newest price per product and store is all lastPrice() looks at.
     db.prepare(`SELECT id, product_id, store, qty, price_cents, MAX(bought_on) AS bought_on FROM purchases
       WHERE household_id = ? AND deleted_at IS NULL AND price_cents IS NOT NULL AND item_id IN (${OPEN_ITEMS})
@@ -84,8 +107,6 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
     const product = resolved && !isExcluded(`${resolved.product.brand ?? ""} ${resolved.product.name}`) ? resolved.product : null;
     const store = lineStore(product ? resolved : null);
     const { mine, named } = lineOffers(e.title, product, current, null);
-    // His own product on offer anywhere; else something with the line's name at AH or Dirk.
-    const offer = mine[0] ?? named.find((o) => isRegularStore(o.store)) ?? null;
     return {
       store,
       line: {
@@ -105,15 +126,7 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
           for_recipe: resolved.why?.recipe ?? null,
         },
         only_at: product ? resolved.onlyAt : null,
-        offer: offer && !isExcludedOffer(offer) ? {
-          store: offer.store,
-          name: [offer.brand, offer.name].filter(Boolean).join(" "),
-          // A Lidl Plus coupon says so in the deal text: the widget's payload keeps its shape.
-          deal: [isCoupon(offer) ? "Lidl Plus-coupon" : null, offer.deal].filter(Boolean).join(" · "),
-          price_cents: offer.price_cents ?? null,
-          until: offer.valid_until,
-          mine: mine.includes(offer),
-        } : null,
+        offer: shownOffer(mine, named),
       },
     };
   });
@@ -127,7 +140,12 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
     items: itemRows,
     recipes: byId(recipes.results, "recipes"),
   };
-  const soon = neededSoon(stock, today);
+  // Each row's offer as its list line would have it (soonOffers, the web's
+  // own matching; no Deals tab hits here, as on the widget's lines), a row
+  // with an offer first, the order kept otherwise (05-11-2026).
+  const soon = soonOffers(data, neededSoon(stock, today), current, [], null)
+    .map(({ row, mine, named }) => ({ row, offer: shownOffer(mine, named) }))
+    .map((r, i) => [r, i]).sort(([a, i], [b, j]) => (a.offer ? 0 : 1) - (b.offer ? 0 : 1) || i - j).map(([r]) => r);
 
   return {
     rev: head?.rev ?? 0,
@@ -139,11 +157,13 @@ export async function widgetList(db, hh, since = 0, today = amsterdamDay(), memb
     // item and day, so a second tap or a retry never adds twice. `tick` is the
     // list line the row's box makes (tickEntry); the widget sends it as
     // tickOps does: entry.add + entry.check of one new line, its own ids.
-    needed_soon: soon.map((n) => ({
+    // `offer` (1.7) has a list line's shape or is null; an older APK ignores it.
+    needed_soon: soon.map(({ row: n, offer }) => ({
       key: n.key, name: shown(n.name), code: n.code, amount: n.amount,
       days_left: n.days_left === null ? null : Math.floor(n.days_left), on: n.on,
       not_yet: notYetOp(stock, today, n, () => `pn-${today}-${n.item_id}`.slice(0, 64)),
       tick: tickEntry(n),
+      offer,
     })),
   };
 }

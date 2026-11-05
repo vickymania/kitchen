@@ -170,3 +170,44 @@ test("widget route: ?since=<rev> with nothing new reads only the household count
   assert.ok(after.rev > rev);
   assert.equal(after.count, 5, "a change: the whole (small) list again");
 });
+
+// 1.7 (05-11-2026: "waarom zou ik het anders nú al kopen?"): an
+// "Al nodig?" row carries its offer as a list line does, and comes first.
+test("widget route: an Al nodig? row has its offer, a row on offer first, never an excluded one", async () => {
+  const env = await makeEnv();
+  await env.DB.exec(await bootstrapSql({ household: "Thuis", name: "Thomas", code: "123456" }));
+  const thomas = tokenOf(await worker.fetch(new Request(`http://${HOST}/api/pair`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: `http://${HOST}` }, body: JSON.stringify({ code: "123456", label: "widget" }),
+  }), env));
+  const today = amsterdamDay();
+  const ops = [
+    { type: "pantry.add", id: "pantry-wsoon-rice", item_id: "item-wsoon-rice01", title: "Rijst", amount: 0.1, pack_size: "1 kg", on: today },
+    { type: "pantry.add", id: "pantry-wsoon-kofi", item_id: "item-wsoon-kofi01", title: "Koffie", amount: 0.1, pack_size: "250 g", on: today },
+    { type: "pantry.add", id: "pantry-wsoon-tea1", item_id: "item-wsoon-tea001", title: "Thee", amount: 0.1, pack_size: "20 stuks", on: today },
+    { type: "product.put", id: "product-wsoon-tea1", product: { name: "Engelse melange", brand: "Pickwick", size: "20 stuks", store: "AH", item_id: "item-wsoon-tea001" } },
+    { type: "preference.set", id: "pref-wsoon-tea001", item_id: "item-wsoon-tea001", product_id: "product-wsoon-tea1" },
+  ].map((o, i) => ({ op_id: `op-wsoon-${String(i).padStart(6, "0")}`, ...o }));
+  const sent = await (await call(env, "POST", "/api/ops", { bearer: thomas, body: { ops } })).json();
+  assert.deepEqual(sent.results.filter((r) => !r.ok), []);
+  const before = await (await call(env, "GET", "/api/widget", { bearer: thomas })).json();
+  assert.deepEqual(before.needed_soon.map((r) => [r.name, r.offer]), [["Koffie", null], ["Rijst", null], ["Thee", null]], "no offers: the section's own order");
+
+  const offer = (id, o) => env.DB.prepare(`INSERT INTO offers (id, household_id, store, name, brand, size, deal, price_cents, valid_from, valid_until, category, created_at, updated_at, deleted_at, rev)
+    VALUES (?, (SELECT id FROM households LIMIT 1), ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 'x', 'x', NULL, 1)`)
+    .bind(id, o.store, o.name, o.brand ?? null, o.deal, o.price_cents, day(-1), day(4)).run();
+  await offer("of-wsoon-tea1", { store: "Jumbo", name: "Engelse melange", brand: "Pickwick", deal: "2 voor 4,00", price_cents: 249 });
+  await offer("of-wsoon-tead", { store: "Dirk", name: "Thee", deal: "-25%", price_cents: 149 });
+  await offer("of-wsoon-kofi", { store: "Albert Heijn", name: "Koffie", brand: "Groene Ster", deal: "1+1 gratis", price_cents: 599 });
+  // A change of the household rev, so the payload is new (offers come from the fetcher, not an op).
+  await env.DB.prepare("UPDATE households SET rev = rev + 1").run();
+
+  const body = await (await call(env, "GET", "/api/widget", { bearer: thomas })).json();
+  assert.deepEqual(body.needed_soon.map((r) => r.name), ["Thee", "Koffie", "Rijst"], "the row on offer first, the rest in their order");
+  assert.deepEqual(body.needed_soon[0].offer, {
+    store: "Jumbo", name: "Pickwick Engelse melange", deal: "2 voor 4,00", price_cents: 249, until: day(4), mine: true,
+  }, "his product first, at any store");
+  assert.equal(body.needed_soon[1].offer, null, "the excluded coffee offer is not there");
+  assert.ok(!/Groene Ster/.test(JSON.stringify(body)), "nowhere in the payload");
+  // Still a "Nog niet" and a tick per row, as before.
+  assert.ok(body.needed_soon.every((r) => r.not_yet && r.tick));
+});

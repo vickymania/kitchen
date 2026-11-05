@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- One "Al nodig?" row: the circle (1.5: straight into the basket, like a ticked line), the name,
-     what is left ("nog 5 · ~6 dagen") and "Nog niet". Only the circle ticks. -->
+     what is left ("nog 5 · ~6 dagen"), its offer (1.7, as a list line's tag) and "Nog niet". Only the circle ticks.
+     The circle is ink, in the deal colour when the row is on offer (1.7, as .soon-line.has-deal on the web). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -19,7 +20,7 @@
         android:paddingTop="13dp"
         android:paddingEnd="14dp"
         android:paddingBottom="13dp"
-        android:src="@drawable/check_ring" />
+        android:src="@drawable/check_ring_plain" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -45,6 +46,18 @@
             android:maxLines="1"
             android:textColor="@color/mute"
             android:textSize="12sp" />
+
+        <!-- 1.7: the best current offer, the same tag as under a list line ("% Jumbo 2 voor 4,00"). -->
+        <TextView
+            android:id="@+id/soon_offer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="monospace"
+            android:maxLines="1"
+            android:textColor="@color/mute"
+            android:textSize="12sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- "Nog niet": more left than the app thinks (or not needed for a few days). -->

@@ -39,6 +39,8 @@ object ListState {
         val daysLeft: Int?, val on: String?, val notYet: JSONObject?,
         /** 1.5: the list line the tick box makes ({ title, amounts }, tickEntry in needed-soon.js). */
         val tick: JSONObject?,
+        /** 1.7: the best current offer, as a list line's (null on a payload from before 1.7). */
+        val offer: Offer?,
     )
 
     /** The day the server counts in (amsterdamDay in worker/offers.js). */
@@ -55,6 +57,7 @@ object ListState {
             Soon(
                 o.optString("key"), o.optString("name"), o.optString("code"), amount.optDouble("qty", 0.0), amount.stringOrNull("base"),
                 o.intOrNull("days_left"), o.stringOrNull("on"), o.optJSONObject("not_yet"), o.optJSONObject("tick"),
+                offerOf(o.optJSONObject("offer")),
             )
         }.filter { it.key !in hidden }
     }
@@ -103,14 +106,17 @@ object ListState {
                 it.optBoolean("store_only"), it.intOrNull("last_price_cents"), it.stringOrNull("for_recipe"),
             )
         }
-        val offer = o.optJSONObject("offer")?.let {
-            Offer(it.optString("store"), it.optString("name"), it.optString("deal"), it.intOrNull("price_cents"), it.optString("until"), it.optBoolean("mine"))
-        }
+        val offer = offerOf(o.optJSONObject("offer"))
         val recipes = o.optJSONArray("recipes") ?: JSONArray()
         return Line(
             o.getString("id"), o.optString("title"), o.optJSONArray("amounts") ?: JSONArray(), o.optString("note"),
             (0 until recipes.length()).map { recipes.getString(it) }, product, o.stringOrNull("only_at"), offer,
         )
+    }
+
+    /** A list line's or (1.7) an "Al nodig?" row's offer; null when there is none. */
+    private fun offerOf(it: JSONObject?): Offer? = it?.let {
+        Offer(it.optString("store"), it.optString("name"), it.optString("deal"), it.intOrNull("price_cents"), it.optString("until"), it.optBoolean("mine"))
     }
 
     private fun JSONObject.intOrNull(key: String) = if (isNull(key)) null else getInt(key)

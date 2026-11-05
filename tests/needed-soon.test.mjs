@@ -210,8 +210,8 @@ test("widget route: needed soon with what is left and the day it is true for", a
   const shown = body.needed_soon.map(({ not_yet, tick, ...rest }) => rest);
   assert.deepEqual(body.needed_soon.map((x) => x.tick), [{ title: "Minoes eten", amounts: [] }, { title: "Rijst", amounts: [{ qty: 1, unit: "kg" }] }]);
   assert.deepEqual(shown, [
-    { key: "minoes eten", name: "Minoes eten", code: "below", amount: { qty: 5, base: null }, days_left: 5, on: null },
-    { key: "rijst", name: "Rijst", code: "below", amount: { qty: 100, base: "g" }, days_left: null, on: null },
+    { key: "minoes eten", name: "Minoes eten", code: "below", amount: { qty: 5, base: null }, days_left: 5, on: null, offer: null },
+    { key: "rijst", name: "Rijst", code: "below", amount: { qty: 100, base: "g" }, days_left: null, on: null, offer: null },
   ], "milk is on the list");
   assert.equal(body.count, 1);
   const [cat, rice] = body.needed_soon;

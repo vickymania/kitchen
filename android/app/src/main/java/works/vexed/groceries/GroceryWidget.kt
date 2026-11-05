@@ -116,14 +116,14 @@ class GroceryWidget : AppWidgetProvider() {
             // "Al nodig?" under the list (1.4): a hint with what is left and "Nog niet".
             val soon = if (linked) ListState.neededSoon(context) else emptyList()
             if (soon.isNotEmpty()) {
-                if (count == 0) items.addItem("empty".hashCode().toLong(), soonRow(context, context.getString(R.string.widget_empty), "", null, null))
+                if (count == 0) items.addItem("empty".hashCode().toLong(), soonRow(context, context.getString(R.string.widget_empty), "", null, null, null))
                 val heading = RemoteViews(context.packageName, R.layout.widget_group)
                 heading.setTextViewText(R.id.group, context.getString(R.string.soon_title))
                 heading.setTextColor(R.id.group, context.getColor(R.color.mute))
                 items.addItem("group:soon".hashCode().toLong(), heading)
                 soon.forEach { s ->
                     items.addItem("soon:${s.key}".hashCode().toLong(),
-                        soonRow(context, s.name, SoonText.of(context, s), s.key.takeIf { s.notYet != null }, s.key.takeIf { s.tick != null }))
+                        soonRow(context, s.name, SoonText.of(context, s), s.key.takeIf { s.notYet != null }, s.key.takeIf { s.tick != null }, s.offer))
                 }
             }
             views.setRemoteAdapter(R.id.lines, items.build())
@@ -166,11 +166,14 @@ class GroceryWidget : AppWidgetProvider() {
             return row
         }
 
-        /** notYetKey / tickKey null: no "Nog niet" / no circle (the "nothing on the list" row). */
-        private fun soonRow(context: Context, name: String, left: String, notYetKey: String?, tickKey: String?): RemoteViews {
+        /** notYetKey / tickKey null: no "Nog niet" / no circle (the "nothing on the list" row); offer (1.7) under the row, the circle in the deal colour. */
+        private fun soonRow(context: Context, name: String, left: String, notYetKey: String?, tickKey: String?, offer: ListState.Offer?): RemoteViews {
             val row = RemoteViews(context.packageName, R.layout.widget_soon)
             row.setTextViewText(R.id.soon_name, name)
             row.setTextViewText(R.id.soon_left, left)
+            row.setTextViewText(R.id.soon_offer, offer?.let { LineText.offerTag(context, it) } ?: "")
+            row.setViewVisibility(R.id.soon_offer, if (offer == null) View.GONE else View.VISIBLE)
+            row.setImageViewResource(R.id.soon_tick, if (offer == null) R.drawable.check_ring_plain else R.drawable.check_ring)
             row.setViewVisibility(R.id.soon_not_yet, if (notYetKey == null) View.GONE else View.VISIBLE)
             if (notYetKey != null) row.setOnClickFillInIntent(R.id.soon_not_yet, tap(notYetKey, WHAT_NOT_YET))
             // Without a circle the 52dp column stays, so the text lines up with the list's lines.
