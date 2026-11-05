@@ -14,6 +14,8 @@ import { withUsage } from "../public/shared/pantry.js";
 import { parseIngredient } from "../public/shared/ingredients.js";
 import { addDays } from "../public/shared/shelf-life.js";
 import { amsterdamDay } from "../worker/offers.js";
+import { currentOffers } from "../public/shared/offers.js";
+import { soonOffers } from "../public/shared/deals.js";
 
 const DAY = "2026-10-01";
 const ctx = (day = DAY) => ({ memberId: "member-thomas-01", isAdmin: true, now: `${day}T10:00:00.000Z` });
@@ -262,4 +264,46 @@ test("the tick box: one tap is an open line ticked into the basket; it leaves Al
   applyOp(s, { type: "entry.clear_checked", ids: ["entry-soon-tickr1"] }, ctx());
   assert.ok(!names(s, DAY).includes("Rijst"), "the tick filled the pantry: rice is no longer low");
   assert.deepEqual(tickOps(entryOf(s, DAY, "Minoes eten"), "e1-soon-x", "i1-soon-x")[0].amounts, undefined, "no weight: no amount");
+});
+
+// ------------------------------------------- offers on "Al nodig?" (05-11-2026)
+
+const soonOffer = (o) => ({ id: `of-${o.store}-${o.name}`, brand: null, size: null, deal: "1+1 gratis", price_cents: 199,
+  valid_from: DAY, valid_until: at(5), category: null, source: null, deleted_at: null, ...o });
+const shown = (rows) => rows.map(({ row, mine, named }) => [row.name, mine.map((o) => o.store), named.map((o) => o.store)]);
+
+test("Al nodig? offers: as on the list line, his product first, a row on offer first, never an excluded offer, the chosen store only", () => {
+  const s = emptyState();
+  stock(s, "Wc-blokjes", 2, { perDay: 1 / 2 }); // 4 days: first without offers
+  const filters = stock(s, "Filters", 1, { perDay: 1 / 10 }); // 10 days
+  stock(s, "Rijst", 0.1, { pack_size: "1 kg" });
+  // His product for Filters: the Melitta filters, on offer at Jumbo; plain "filters" at Dirk by name.
+  s.products["p-soon-melitta"] = { id: "p-soon-melitta", name: "Koffiefilters 1x4", brand: "Melitta", store: "Jumbo", store_only: 0, deleted_at: null };
+  s.preferences["pr-soon-filter"] = { id: "pr-soon-filter", item_id: filters, product_id: "p-soon-melitta", store: "", recipe_id: "", updated_at: `${DAY}T10:00:00Z`, deleted_at: null };
+  s.offers = {
+    a: soonOffer({ store: "Jumbo", name: "Melitta koffiefilters 1x4" }),
+    b: soonOffer({ store: "Dirk", name: "Filters" }),
+    // Rice by name, but a never-suggest brand: never shown, also not as "named".
+    c: soonOffer({ store: "Albert Heijn", name: "Groenhof rijst" }),
+  };
+  const current = currentOffers(s.offers, DAY);
+  const rows = neededSoon(s, DAY);
+  assert.deepEqual(soonOffers(s, rows, Object.values(s.offers), [], null).find((r) => r.row.name === "Rijst").named.map((o) => o.name),
+    ["Groenhof rijst"], "unfiltered, the name would match: currentOffers is what keeps it out");
+  assert.deepEqual(rows.map((r) => r.name), ["Wc-blokjes", "Rijst", "Filters"], "the section's own order");
+  assert.deepEqual(shown(soonOffers(s, rows, current, [], null)), [
+    ["Filters", ["Jumbo"], ["Dirk"]],
+    ["Wc-blokjes", [], []],
+    ["Rijst", [], []],
+  ], "Filters on offer comes first; his product is mine, the name only named; the excluded rice offer is gone");
+  // "Ik ben bij Dirk": only Dirk's offer.
+  assert.deepEqual(shown(soonOffers(s, rows, current, [], "Dirk"))[0], ["Filters", [], ["Dirk"]]);
+  // "Ik ben bij Lidl": nothing on offer, the section's own order.
+  assert.deepEqual(shown(soonOffers(s, rows, current, [], "Lidl")).map((r) => r[0]), ["Wc-blokjes", "Rijst", "Filters"]);
+  // What the Deals tab found for the item shows too, as on its line.
+  const felix = soonOffer({ store: "Albert Heijn", name: "Felix pouches" });
+  const hit = { item: { id: rows[0].item_id, name: "Wc-blokjes" }, offer: felix, product: null, check: null };
+  assert.deepEqual(shown(soonOffers(s, rows, [...current, felix], [hit], null)).map((r) => r[0]), ["Wc-blokjes", "Filters", "Rijst"],
+    "both on offer: their own order between them, before the rest");
+  assert.deepEqual(shown(soonOffers(s, rows, [...current, felix], [hit], null))[0], ["Wc-blokjes", [], ["Albert Heijn"]]);
 });

@@ -13,6 +13,7 @@ import { localToday, daysBetween } from "../shared/intervals.js";
 import { KEEPS, SHELF_DAYS_MAX, itemShelfDays, itemOpenedDays, addDays } from "../shared/shelf-life.js";
 import { lowStock, lowByKey, stockKey, stockOf, underThreshold } from "../shared/low-stock.js";
 import { neededSoon, leftAmount, notYetOp, tickOps, NOT_YET_DAYS } from "../shared/needed-soon.js";
+import { soonOffers } from "../shared/deals.js";
 import * as store from "./store.js";
 import { syncLine } from "./status.js";
 import { groceryTabs } from "./groceries.js";
@@ -477,13 +478,18 @@ async function tickSoon(n) {
  * left ticks (into the basket); "Nog niet" says there is more than the app
  * thinks. Null when nothing runs out soon.
  */
-export function soonSection(view, today) {
+export function soonSection(view, today, deals = null) {
   const soon = neededSoon(view, today);
   if (!soon.length) return null;
+  // With deals ({ current, hits, shop, line }): each row's offers as on its
+  // list line, a row with an offer first (soonOffers in public/shared/deals.js).
+  const rows = deals
+    ? soonOffers(view, soon, deals.current, deals.hits, deals.shop)
+    : soon.map((row) => ({ row, mine: [], named: [] }));
   return h("section", { class: "store-group soon", "aria-label": t("soon.title") },
     h("h3", { class: "sub mono" }, t("soon.title"), h("span", { class: "n" }, `· ${soon.length}`)),
     h("p", { class: "soon-hint" }, t("soon.hint")),
-    h("ul", { class: "entries" }, soon.map((n) => h("li", { class: "entry line soon-line" },
+    h("ul", { class: "entries" }, rows.map(({ row: n, mine, named }) => h("li", { class: `entry line soon-line${mine.length || named.length ? " has-deal" : ""}` },
       h("button", {
         type: "button", class: "tick", role: "checkbox", "aria-checked": "false",
         "aria-label": t("list.tick", { title: shownName(view, n.name) }), onclick: () => tickSoon(n),
@@ -491,7 +497,8 @@ export function soonSection(view, today) {
       h("div", { class: "line-main" },
         h("span", { class: "ttl" }, shownName(view, n.name)),
         h("button", { type: "button", class: "btn ghost mono soon-not-yet", onclick: () => notYet(n) }, t("soon.not_yet")),
-        h("span", { class: "short mono" }, soonText(n, today)))))));
+        h("span", { class: "short mono" }, soonText(n, today)),
+        deals ? deals.line(mine, named) : null)))));
 }
 
 /** The sentence under the "waarschuw onder" box, live while typing. */

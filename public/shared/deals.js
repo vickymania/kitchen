@@ -503,6 +503,23 @@ export function liveLineOffers(entry, product, current, hits = [], store = null)
   return { mine, named };
 }
 
+/**
+ * "Al nodig?" with its offers (05-11-2026: "dat is júíst daar extra
+ * belangrijk"): each row of neededSoon() gets the offers its list line would
+ * have (liveLineOffers on the item's resolved product at `store`, same
+ * matching, same store rules), and a row with an offer comes first; the
+ * order is kept otherwise. Returns [{ row, mine, named }].
+ */
+export function soonOffers(view, rows, current, hits = [], store = null) {
+  const out = rows.map((row) => {
+    const entry = { title: row.title ?? row.name, item_id: row.item_id, sources: [] };
+    const product = resolveProduct(view, entry, store)?.product ?? null;
+    return { row, ...liveLineOffers(entry, product, current, hits, store) };
+  });
+  const has = (r) => (r.mine.length || r.named.length ? 0 : 1);
+  return out.map((r, i) => [r, i]).sort(([a, i], [b, j]) => has(a) - has(b) || i - j).map(([r]) => r);
+}
+
 /** "Bij Dirk" is worth saying when a store is chosen only from this gap: 10% or €0,30. */
 export const SWITCH_MIN_PCT = 10;
 export const SWITCH_MIN_CENTS = 30;

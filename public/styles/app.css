@@ -546,6 +546,8 @@ div.field>span{display:block;color:var(--mute);margin-bottom:6px}
 .entry.line.soon-line .line-main:hover{background:transparent}
 .entry.line.soon-line .soon-not-yet{min-height:36px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
 .entry.line.soon-line .soon-not-yet:hover{color:var(--ink)}
+/* An "Al nodig?" row on offer: its box in the deal colour, the row first. */
+.entry.line.soon-line.has-deal .box{border-color:var(--signal)}
 /* The basket on top: no big gap above it, a gap below before the first store. */
 .cart>summary{margin-top:0;border-top:1px solid var(--rule)}
 .cart{margin-bottom:clamp(8px,2vw,16px)}

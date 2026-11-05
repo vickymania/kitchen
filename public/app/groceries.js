@@ -467,7 +467,11 @@ export function mountGroceries(root, focusId = null) {
         h("h3", { class: "sub mono" }, heading(g), h("span", { class: "n" }, `· ${g.lines.length}`)),
         h("ul", { class: "entries" }, g.lines.map((l) => entryRow(l, ctx)))))
       : h("p", { class: "empty" }, t("list.empty")));
-    fill(soon, soonSection(view, localToday()));
+    // "Al nodig?" with the offers its list line would have, a row with one first.
+    fill(soon, soonSection(view, localToday(), {
+      current: deals, hits, shop,
+      line: (mine, named) => [mine.length ? dealLine(mine, { mine: true }) : null, named.length ? dealLine(named) : null],
+    }));
 
     const focused = focusId && view.entries[focusId];
     if (focused) {
