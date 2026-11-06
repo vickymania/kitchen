@@ -220,10 +220,17 @@ test("the add-to-list sheet: what the pantry has enough of is unticked, a part s
   const six = listCover({ recipe: HENK, data: HIS(), today: DAY, scale: (i) => scaleIngredient(i, 3, 6) });
   assert.deepEqual(six.get(HENK.ingredients.findIndex((i) => i.name === "pasta")), { on: true, have: 1, kind: "partial" });
 
-  // In the house, amount unsure: a note, the default tick.
+  // In the house, amount unsure: half a pack or more starts unticked, under half stays ticked, both with the note.
   const fresh = { id: "recipe-fresh-01", ingredients: [ing("verse peterselie")] };
   const d = { pantry: pantryOf([{ id: "p-pet", title: "Peterselie", amount: 1 }]), items: {}, pantry_events: {} };
-  assert.deepEqual(listCover({ recipe: fresh, data: d, today: DAY }).get(0), { on: null, have: 1, kind: "have" });
+  assert.deepEqual(listCover({ recipe: fresh, data: d, today: DAY }).get(0), { on: false, have: 1, kind: "have" });
+  d.pantry["p-pet"].amount = 0.25;
+  assert.deepEqual(listCover({ recipe: fresh, data: d, today: DAY }).get(0), { on: true, have: 0.25, kind: "have" });
+
+  // Tap water is never in the pantry, whatever a look-alike row is called.
+  const tap = { pantry: pantryOf([{ id: "p-wf", title: "Waterfilter kattenfontein", amount: 11.7 }]), items: {}, pantry_events: {} };
+  assert.equal(listCover({ recipe: { id: "r-t", ingredients: [ing("water"), ing("1 l kokend water")] }, data: tap, today: DAY }).size, 0);
+  assert.deepEqual(cookTakes({ recipe: { id: "r-t", ingredients: [ing("water")] }, data: tap, today: DAY }), []);
 
   // Live amounts: ketchup counted down to nothing is not in the house.
   const rated = { pantry: pantryOf([{ id: "p-k", item_id: "item-k", title: "Ketchup", amount: 0.5, added_on: "2026-10-01" }]),
@@ -233,4 +240,23 @@ test("the add-to-list sheet: what the pantry has enough of is unticked, a part s
   // Never an excluded thing, not even as "in huis".
   const sprouts = { id: "r-w", ingredients: [ing("2 el verse spruitjes")] };
   assert.equal(listCover({ recipe: sprouts, data: HIS(), today: DAY }).size, 0);
+});
+
+test("2 eggs from a row without a size use the household's 12 pack, not 2 packs", () => {
+  const row = { id: "p-ei", item_id: "item-ei", title: "Eieren", amount: 1, pack_size: "" };
+  const data = {
+    pantry: pantryOf([row]), items: { "item-ei": { id: "item-ei", name: "Eieren", name_key: "eieren" } }, pantry_events: {},
+    products: { pr1: { id: "pr1", item_id: "item-ei", name: "Scharreleieren", size: "12 stuks" } },
+    purchases: { pu1: { id: "pu1", item_id: "item-ei", product_id: "pr1" } },
+  };
+  const need = needOf(ing("2 ei"), data.pantry["p-ei"], { data });
+  assert.ok(Math.abs(need.packs - 2 / 12) < 1e-9);
+  const takes = cookTakes({ recipe: { id: "r-ei", ingredients: [ing("2 ei")] }, data, today: DAY });
+  assert.equal(takes.length, 1);
+  assert.ok(Math.abs(takes[0].amount - 0.17) < 0.005, "a sixth of the pack, not the whole one");
+  // A receipt that fills in the pack size later gives the same share.
+  data.pantry["p-ei"].pack_size = "12 stuks";
+  assert.ok(Math.abs(needOf(ing("2 ei"), data.pantry["p-ei"], { data }).packs - 2 / 12) < 1e-9);
+  // Things genuinely counted in packs stay packs.
+  assert.equal(needOf(ing("2 blikken tomaten"), { ...row, pack_size: "" }, { data }).packs, 2);
 });

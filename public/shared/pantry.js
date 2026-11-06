@@ -20,6 +20,7 @@ import { ruleRate } from "./usage-rates.js";
 import { portionCategory, categoryPack, stapleDefault } from "./default-portions.js";
 import { ingredientKey, resolveName, itemFinder, alternativesOf } from "./ingredient-match.js";
 import { aliasTarget } from "./item-find.js";
+import { FROM_THE_TAP } from "./recipe-links.js";
 
 /** A receipt within this many days of a tick is the same shopping. */
 export const MATCH_DAYS = 2;
@@ -353,6 +354,14 @@ export function needOf(ing, row, { data = {}, recipeId = "", key = nameKey(ing?.
       if (d && d.base === base) return { packs: qty / d.qty, estimate: true };
     }
   }
+  // A count ("2 ei") against a row without a size: the household's pack when it
+  // is counted in pieces (a 12 pack: 2/12), not as 2 packs: 2 eggs once emptied
+  // the whole pack (05-11-2026). With no known size the row's amount is
+  // taken as pieces ("3 uien" bought as 3), as before.
+  if (!rowPack && (ing.unit === null || PIECE_UNITS.has(ing.unit))) {
+    const h = house();
+    if (h?.base === "piece") return { packs: ing.qty / h.qty, estimate: false };
+  }
   const packs = packsFor(ing, row);
   return packs === null ? null : { packs, estimate: false };
 }
@@ -378,6 +387,8 @@ export function cookPlan({ recipe, data: stored, today, scale = (i) => i, short 
     // The name without how it is prepared: "melk, lauwwarm" is melk.
     const key = ingredientKey(raw.name);
     if (!key || isExcluded(raw.name)) continue;
+    // Water from the tap is never in the pantry ("Waterfilter kattenfontein" is no water).
+    if (FROM_THE_TAP.has(key)) continue;
     // The thing the household calls it (public/shared/ingredient-match.js):
     // its rows come first, whatever their titles say; else the old word match.
     // Portions and pack defaults read the recipe's own words ("verse
@@ -555,15 +566,16 @@ export function cookTakes({ recipe, data: stored, today, scale = (i) => i }) {
  * The "Op de lijst" sheet's pantry view: Map ingredient index -> { on, have,
  * kind }. kind "enough": the pantry has what this cook needs (on false,
  * pre-unticked); "partial": less than needed (on true, stays ticked); "have":
- * in the house but the amount needed is unsure (on null: the sheet's own
- * default). Ingredients with nothing in the house are absent. Same matching
+ * in the house but the amount needed is unsure (on false when at least
+ * half a pack is there, on true under that: he has the rice, he does not want
+ * it on the list). Ingredients with nothing in the house are absent. Same matching
  * and amounts as cookTakes, on the live amounts (withUsage).
  */
 export function listCover({ recipe, data, today, scale = (i) => i }) {
   const out = new Map();
   for (const line of cookPlan({ recipe, data, today, scale })) {
     if (!(line.have > 0)) continue;
-    if (line.need === null) out.set(line.index, { on: null, have: line.have, kind: "have" });
+    if (line.need === null) out.set(line.index, { on: line.have < 0.5, have: line.have, kind: "have" });
     else if (line.have >= line.need - 0.005) out.set(line.index, { on: false, have: line.have, kind: "enough" });
     else out.set(line.index, { on: true, have: line.have, kind: "partial" });
   }

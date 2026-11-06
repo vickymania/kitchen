@@ -6,7 +6,7 @@ import "./never-suggest.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseIngredient } from "../public/shared/ingredients.js";
-import { matchKeys, resolveIngredient, listTargets, numberForms, ingredientKey } from "../public/shared/ingredient-match.js";
+import { matchKeys, resolveIngredient, listTargets, alreadyOnList, numberForms, ingredientKey } from "../public/shared/ingredient-match.js";
 import { cookTakes, cookPending, listCover } from "../public/shared/pantry.js";
 import { applyOp, emptyState } from "../public/shared/ops.js";
 import { auditRecipes, reportText } from "../tools/audit_recipe_items.mjs";
@@ -360,4 +360,21 @@ test("an English recipe finds the Dutch household's items through the lexicon", 
   assert.equal(named(EN_HOUSE, "ginger powder"), "Gember gemalen");
   // Without "Gember gemalen" the powder falls back to Gember (gemalen is a free word).
   assert.equal(named({ items: itemsOf(["Gember"]), aliases: {} }, "ground ginger"), "Gember");
+});
+
+test("alreadyOnList: an open line of the same item, however the recipe spells it", () => {
+  const data = {
+    items: itemsOf(["Sojasaus", "Rijst"]),
+    aliases: {},
+    entries: {
+      e1: { id: "e1", item_id: "item-sojasaus", title: "Sojasaus — AH Sojasaus 250 ml", checked_at: null, deleted_at: null },
+      e2: { id: "e2", item_id: "item-rijst", title: "Rijst", checked_at: "2026-11-05T10:00:00Z", deleted_at: null },
+    },
+  };
+  assert.equal(alreadyOnList("Soja saus", data)?.id, "e1");
+  assert.equal(alreadyOnList("sojasaus", data)?.id, "e1");
+  assert.equal(alreadyOnList("rijst", data), null, "in the basket does not count");
+  assert.equal(alreadyOnList("sesamolie", data), null, "unknown item");
+  data.entries.e1.deleted_at = "2026-11-06T00:00:00Z";
+  assert.equal(alreadyOnList("Soja saus", data), null, "deleted does not count");
 });

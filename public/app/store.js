@@ -8,7 +8,7 @@
 // Screens read the view and change it only through dispatch(op). When the
 // worker answers, confirmed ops leave the outbox and the server state takes
 // their place, so a screen never flickers back to the old state.
-import { applyOp, emptyState, KINDS } from "../shared/ops.js";
+import { applyOp, emptyState, KINDS, kindsSignature, startRev } from "../shared/ops.js";
 import { api, isOffline } from "./api.js";
 import { newId } from "./dom.js";
 
@@ -116,9 +116,14 @@ export function onRefused(fn) {
 
 export async function init() {
   try {
-    server = (await idbGet("server")) ?? server;
-    // A copy saved before phase 2 has no products, purchases, ... yet.
-    server.state = { ...emptyState(), ...server.state };
+    const saved = await idbGet("server");
+    if (saved) {
+      server = saved;
+      // A copy saved before phase 2 has no products, purchases, ... yet.
+      server.state = { ...emptyState(), ...server.state };
+      // ...and its counter would never bring them: a copy made with other KINDS loads in full once.
+      server.rev = startRev(saved);
+    }
     outbox = (await idbGet("outbox")) ?? [];
     me = (await idbGet("me")) ?? null;
   } catch {
@@ -193,7 +198,7 @@ function mergePull(data) {
       else state[kind][row.id] = row;
     }
   }
-  server = { rev: data.rev, state };
+  server = { rev: data.rev, state, kinds: kindsSignature() };
 }
 
 async function syncOnce() {

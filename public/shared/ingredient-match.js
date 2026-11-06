@@ -30,7 +30,7 @@
 // cooking takes nothing for it.
 import { nameKey, splitPrep } from "./ingredients.js";
 import { canonicalName, GENERIC } from "./item-names.js";
-import { findItem } from "./item-find.js";
+import { findItem, aliasTarget } from "./item-find.js";
 import { dutchNames } from "./ingredient-lexicon.js";
 
 /** Words that never change which product is meant. "witte" is a colour (witte bonen) and stays; "wit" is flour or bread. */
@@ -256,4 +256,25 @@ export function listTargets(name, data, find = itemFinder(data)) {
     return out;
   }
   return [one(name)];
+}
+
+/**
+ * The open list line an ingredient is already on, or null (06-11-2026:
+ * "sojasaus stond al op mn lijst"). The ingredient resolves to the household's
+ * item the same way the sheet adds it (so "Soja saus" is the item "Sojasaus");
+ * a line counts when it is open (not in the basket, not deleted) and its item
+ * is that item or one merged into it. A line that is several things ("zout en
+ * peper") or no known item is never "already on".
+ */
+export function alreadyOnList(name, data, find = itemFinder(data)) {
+  const hit = resolveIngredient(name, data, find);
+  if (!hit) return null;
+  const items = data?.items ?? {};
+  for (const e of Object.values(data?.entries ?? {})) {
+    if (!e || e.deleted_at || e.checked_at || !e.item_id) continue;
+    if (e.item_id === hit.item.id) return e;
+    const target = aliasTarget(items, items[e.item_id]);
+    if (target && target.id === hit.item.id) return e;
+  }
+  return null;
 }

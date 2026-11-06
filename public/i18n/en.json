@@ -92,7 +92,8 @@
     "done": { "one": "1 item on the list", "other": "{n} items on the list" },
     "open_list": "Open list",
     "in_house": "at home: {n}",
-    "partly": "{n} left at home"
+    "partly": "{n} left at home",
+    "on_list": "already on your list"
   },
   "cook": {
     "close": "Close cook mode",

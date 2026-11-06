@@ -54,6 +54,19 @@ export const OP_TYPES = [
 
 export const KINDS = ["recipes", "items", "entries", "members", "products", "ratings", "purchases", "receipts", "cooks", "offers", "preferences", "pantry", "pantry_events", "deal_rules", "pending_takes", "cook_prompts", "recipe_ratings", "aliases", "store_prices", "reviews", "auto_changes", "decisions"];
 
+/** The kinds a saved copy was made with: a different list means older copies lack rows of a kind. */
+export const kindsSignature = () => KINDS.join(",");
+
+/**
+ * The change counter a device starts its next sync from. A copy saved before
+ * a kind existed (or without a signature) has that kind empty while its
+ * counter stays, so `since=rev` would never bring the older rows: start from
+ * 0 (a full load) unless the saved signature is the current one.
+ */
+export function startRev(saved) {
+  return saved && saved.kinds === kindsSignature() ? saved.rev ?? 0 : 0;
+}
+
 export function emptyState() {
   return Object.fromEntries(KINDS.map((k) => [k, {}]));
 }

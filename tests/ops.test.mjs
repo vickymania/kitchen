@@ -123,3 +123,11 @@ test("item.rename tidies the shown name only", () => {
   assert.equal(s.items["item-rn001"].name, "Kaneelpoeder");
   assert.equal(code(() => run(s, { type: "item.rename", item_id: "item-rn001", name: "Kaneel" })), "bad_field", "another word is a merge, not a rename");
 });
+
+import { startRev, kindsSignature } from "../public/shared/ops.js";
+test("startRev: a copy saved with other KINDS (or none) loads in full once", () => {
+  assert.equal(startRev({ rev: 120, kinds: kindsSignature() }), 120);
+  assert.equal(startRev({ rev: 120 }), 0, "no signature");
+  assert.equal(startRev({ rev: 120, kinds: "recipes,items" }), 0, "older kinds");
+  assert.equal(startRev(null), 0);
+});

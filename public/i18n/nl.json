@@ -92,7 +92,8 @@
     "done": { "one": "1 item op de lijst", "other": "{n} items op de lijst" },
     "open_list": "Open de lijst",
     "in_house": "in huis: {n}",
-    "partly": "nog {n} in huis"
+    "partly": "nog {n} in huis",
+    "on_list": "staat al op je lijst"
   },
   "cook": {
     "close": "Kookmodus sluiten",

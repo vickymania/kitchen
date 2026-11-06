@@ -13,7 +13,7 @@ import { lastCookedDays } from "../shared/wizard.js";
 import { daysBetween } from "../shared/intervals.js";
 import { recipeProductSheet, recipeProducts } from "./product.js";
 import { cookTakes, cookPending, listCover } from "../shared/pantry.js";
-import { listTargets, itemFinder } from "../shared/ingredient-match.js";
+import { listTargets, itemFinder, alreadyOnList } from "../shared/ingredient-match.js";
 import { OpError } from "../shared/ops.js";
 import { packsText } from "./pantry.js";
 import { recipeStarsLine } from "./stars.js";
@@ -169,7 +169,9 @@ export function recipeProductButton(recipe, name) {
 export async function addToList(recipe) {
   const items = scaled(recipe);
   const picks = new Map();
-  const cover = listCover({ recipe, data: store.getView(), today: todayLocal(), scale: scaleFor(recipe) });
+  const view = store.getView();
+  const find = itemFinder(view);
+  const cover = listCover({ recipe, data: view, today: todayLocal(), scale: scaleFor(recipe) });
   const added = await sheet((close) => {
     const count = h("span", {});
     const button = h("button", { type: "button", class: "btn primary grow", onclick: () => close([...picks].filter(([, on]) => on).map(([i]) => i)) }, count);
@@ -181,8 +183,11 @@ export async function addToList(recipe) {
     const rows = items.map((i, index) => {
       if (i.heading) return h("li", { class: "head mono" }, i.name);
       const home = cover.get(index);
-      const on = !i.optional && !FROM_THE_TAP.has(i.name.toLowerCase()) && home?.on !== false;
-      const note = home ? t(home.kind === "partial" ? "add.partly" : "add.in_house", { n: formatNumber(home.have) }) : null;
+      // Already open on the list: not added a second time unless he ticks it.
+      const queued = alreadyOnList(i.name, view, find) !== null;
+      const on = !i.optional && !FROM_THE_TAP.has(i.name.toLowerCase()) && home?.on !== false && !queued;
+      const note = queued ? t("add.on_list")
+        : home ? t(home.kind === "partial" ? "add.partly" : "add.in_house", { n: formatNumber(home.have) }) : null;
       picks.set(i, on);
       return h("li", {}, h("label", {},
         h("input", { type: "checkbox", checked: on, onchange: (e) => { picks.set(i, e.target.checked); refresh(); } }),
@@ -206,8 +211,6 @@ export async function addToList(recipe) {
   // Each line goes to the household's own item (public/shared/ingredient-match.js):
   // "wit patentbloem" lands on Bloem, three eggs on one Eieren line, "zout en
   // peper" on Zout and Peper, never on a new item named after the recipe's words.
-  const view = store.getView();
-  const find = itemFinder(view);
   for (const i of [...added].reverse()) {
     const amount = amountOf(i);
     const targets = listTargets(i.name, view, find);
