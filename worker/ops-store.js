@@ -210,6 +210,28 @@ async function loadRowProducts(db, hh, s) {
 }
 
 /**
+ * What foldReceiptRows (public/shared/ops.js) reads after a move or merge:
+ * the purchases the loaded live receipt rows came from, the tick rows of the
+ * target item within MATCH_DAYS of those days (cooked-away ones too), their
+ * products and the open pending takes of those days (a handful).
+ */
+async function loadForFold(db, hh, s, targetId) {
+  if (!targetId) return;
+  const receipts = Object.values(s.pantry).filter((r) => !r.deleted_at && r.source_purchase_id && !r.source_entry_id);
+  if (!receipts.length) return;
+  await loadIds(db, hh, s, "purchases", receipts.map((r) => r.source_purchase_id));
+  const days = [...new Set(receipts.map((r) => s.purchases[r.source_purchase_id]?.bought_on)
+    .filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  for (const day of days) {
+    await loadInto(db, hh, s, "pantry", "item_id = ? AND source_purchase_id IS NULL AND source_entry_id IS NOT NULL AND added_on >= ? AND added_on <= ?",
+      targetId, addDays(day, -MATCH_DAYS), addDays(day, MATCH_DAYS));
+    await loadInto(db, hh, s, "pending_takes", "status = 'pending' AND deleted_at IS NULL AND cooked_on >= ? AND cooked_on <= ?",
+      addDays(day, -(PENDING_DAYS + MATCH_DAYS)), addDays(day, 2 * MATCH_DAYS));
+  }
+  await loadRowProducts(db, hh, s);
+}
+
+/**
  * The basket lines a moved receipt may clear (clearBasketForMoved, as the
  * purchase.add loader): the checked, live lines ticked around the days of the
  * given receipt purchases, and the open ones made up to BASKET_OPEN_DAYS
@@ -483,6 +505,7 @@ async function load(db, hh, op, memberId) {
         await loadInto(db, hh, s, "deal_rules", "item_id = ?", itemId);
       }
       await loadBasketForMoved(db, hh, s, Object.values(s.purchases).filter((r) => r.item_id === fromId));
+      await loadForFold(db, hh, s, into?.id);
       // An open line of the from-item merges into into's open line.
       if (into) await loadInto(db, hh, s, "entries", "item_id = ? AND checked_at IS NULL AND deleted_at IS NULL", into.id);
       // Its other names go along; its own name becomes an alias row.
@@ -511,6 +534,7 @@ async function load(db, hh, op, memberId) {
         ...Object.values(s.pantry).map((r) => r.item_id), target?.id].filter((x) => typeof x === "string"))];
       await loadIds(db, hh, s, "items", itemIds);
       for (const itemId of itemIds) await loadInto(db, hh, s, "pantry", "item_id = ? AND deleted_at IS NULL", itemId);
+      await loadForFold(db, hh, s, target?.id);
       if (target) {
         await loadInto(db, hh, s, "preferences", "item_id = ?", target.id);
         await loadInto(db, hh, s, "deal_rules", "item_id = ?", target.id);

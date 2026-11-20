@@ -22,7 +22,8 @@ import { isExcluded } from "../public/shared/excluded.js";
 import { currentOffers, offerMatches, productOfferMatches, isCoupon, brandedName } from "../public/shared/offers.js";
 import { resolveProduct, preferencesOf } from "../public/shared/preferences.js";
 import { canonicalStore, sameStore } from "../public/shared/stores.js";
-import { pantryGroups, displayAmount, daysLeft, wasteCounts, withUsage, rowRate, RATE_MAX } from "../public/shared/pantry.js";
+import { pantryGroups, displayAmount, daysLeft, wasteCounts, withUsage, rowRate, RATE_MAX, tickReceiptPairs } from "../public/shared/pantry.js";
+import { decisionSets } from "../public/shared/dedupe.js";
 import { dealsFor, liveRules, liveLineOffers, REGULAR_STORES } from "../public/shared/deals.js";
 import { pricesOf, oldPricesDay, shortStore } from "../public/shared/store-prices.js";
 import { lowStock, LOW_DEFAULT } from "../public/shared/low-stock.js";
@@ -102,7 +103,7 @@ async function api(method, pathname, body, type = "application/json") {
 // The server process lives as long as the Claude session, so it keeps the
 // household in memory and asks only for what changed since its last look,
 // like the phones do. A full load happens once per session, not per tool call.
-const KINDS = ["recipes", "entries", "members", "items", "products", "ratings", "purchases", "preferences", "offers", "pantry", "pantry_events", "deal_rules", "recipe_ratings", "aliases", "store_prices"];
+const KINDS = ["recipes", "entries", "members", "items", "products", "ratings", "purchases", "preferences", "offers", "pantry", "pantry_events", "deal_rules", "recipe_ratings", "aliases", "store_prices", "decisions"];
 const cache = { rev: 0, ...Object.fromEntries(KINDS.map((k) => [k, new Map()])) };
 
 async function state() {
@@ -127,6 +128,7 @@ async function state() {
     products: [...cache.products.values()],
     ratings: [...cache.ratings.values()],
     items: cache.items,
+    decisions: Object.fromEntries(cache.decisions),
     // Checkjebon's shelf prices of their products (public/shared/store-prices.js).
     storePrices: Object.fromEntries(cache.store_prices),
     // The shape public/shared/suggest.js reads (names, other names, purchases).
@@ -823,7 +825,22 @@ const TOOLS = [
         const had = readIds(shownFile) ?? [];
         fs.writeFileSync(shownFile, JSON.stringify([...new Set([...had, ...before, ...sorted.slice(0, shown).flatMap((g) => g.ids)])]));
       }
-      if (!blocks.length) return carry ? `No unchecked receipt purchases since ${since}.` : `No receipt purchases since ${since}.`;
+      // A tick no receipt filled next to a receipt line of an item nobody listed: one bag linked to two items.
+      const pairs = tickReceiptPairs({ pantry: s.pantry, purchases: Object.fromEntries(cache.purchases), products: Object.fromEntries(products), items: Object.fromEntries(s.items),
+        noMove: decisionSets(s.decisions).noMove, since: addDays(localToday(), -3) });
+      if (pairs.length) {
+        const nameOf = (id) => `${s.items.get(id)?.name ?? "?"} [item: ${id}]`;
+        text += `
+
+Ticked on the list but no receipt line filled it, next to a receipt line of an item nobody listed (maybe one thing, see the rules):`;
+        for (const x of pairs) {
+          const p = products.get(x.product_id);
+          text += `
+- ${x.day} ${p ? `${productLabel(p)} [product: ${p.id}]` : x.product_id} → ${nameOf(x.item_id)}; ticks: ${x.ticks.map((t) => `${nameOf(t.item_id)}${t.empty ? " (used up)" : ""}`).join(" | ")}`;
+        }
+      }
+      if (!blocks.length && !pairs.length) return carry ? `No unchecked receipt purchases since ${since}.` : `No receipt purchases since ${since}.`;
+      if (!blocks.length) return text;
       if (shown < blocks.length) {
         text += carry
           ? `\n(${blocks.length - shown} more wait for the next night: they are checked then. Do not mention them.)`

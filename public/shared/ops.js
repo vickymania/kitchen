@@ -776,13 +776,23 @@ function stockFromPurchase(state, ctx, op, purchase, product) {
     added_on: purchase.bought_on, use_by_source: "estimate", source_entry_id: op.entry_id ? id(op.entry_id, "entry_id") : null,
     created_by: ctx.memberId, created_at: ctx.now, deleted_at: null,
   };
-  if (match) {
-    match.amount = round2(Math.max(0, qty - (match.taken ?? 0)));
-    // What was bought minus what was taken, as of the day it came in: a countdown runs from there.
-    match.amount_on = null;
-    if (match.amount > 0) match.deleted_at = null;
-    else finishIfEmpty(match, ctx);
-  }
+  if (match) fillTickRow(state, ctx, match, purchase, qty, 0);
+  attachPurchase(state, ctx, row, purchase, product, names);
+  return row.id;
+}
+
+/** A tick row a receipt fills in: what was bought minus what was taken (here and `extraTaken` from a receipt row folded into it). */
+function fillTickRow(state, ctx, match, purchase, qty, extraTaken) {
+  if (extraTaken > 0) match.taken = round2((match.taken ?? 0) + extraTaken);
+  match.amount = round2(Math.max(0, qty - (match.taken ?? 0)));
+  // What was bought minus what was taken, as of the day it came in: a countdown runs from there.
+  match.amount_on = null;
+  if (match.amount > 0) match.deleted_at = null;
+  else finishIfEmpty(match, ctx);
+}
+
+/** The purchase, its product and a re-estimated use-by go on the row; the pending cooks it pays are taken off. */
+function attachPurchase(state, ctx, row, purchase, product, names) {
   row.product_id = product?.id ?? row.product_id ?? null;
   if (product?.size) row.pack_size = product.size;
   row.source_purchase_id = purchase.id;
@@ -795,7 +805,35 @@ function stockFromPurchase(state, ctx, op, purchase, product) {
   state.pantry[row.id] = row;
   ctx.touch("pantry", row.id);
   payPending(state, ctx, row);
-  return row.id;
+}
+
+/**
+ * A product moved to the right item (product.move, item.merge): a live
+ * receipt row that came with it and now sits beside an unfilled tick row of
+ * the same item folds into that tick row, as if the receipt had been linked
+ * right the first time. The receipt row gets a tombstone. Returns how many
+ * rows were folded. A replay finds no live receipt row, so it changes nothing.
+ */
+function foldReceiptRows(state, ctx, rows) {
+  let folded = 0;
+  for (const r of rows) {
+    if (r.deleted_at || !r.source_purchase_id || r.source_entry_id) continue;
+    const purchase = state.purchases[r.source_purchase_id];
+    if (!purchase || purchase.deleted_at) continue;
+    const match = matchPurchase(state.pantry, { item_id: r.item_id, bought_on: purchase.bought_on });
+    if (!match) continue;
+    const qty = purchase.qty > 0 ? round2(Math.min(purchase.qty, 100)) : 1;
+    const product = r.product_id ? state.products[r.product_id] : null;
+    const names = [product ? `${product.brand} ${product.name}` : null, purchase.title].filter(Boolean);
+    fillTickRow(state, ctx, match, purchase, qty, r.taken ?? 0);
+    attachPurchase(state, ctx, match, purchase, product, names);
+    r.amount = 0;
+    r.deleted_at = ctx.now;
+    r.updated_at = ctx.now;
+    ctx.touch("pantry", r.id);
+    folded++;
+  }
+  return folded;
 }
 
 /**
@@ -2317,6 +2355,11 @@ const HANDLERS = {
         moved[kind]++;
       }
     }
+    // A receipt row next to a tick row of into folds into it: one that came over, or (when a tick row came over) one into already had.
+    const movedPantry = (rec.rows.pantry ?? []).map((rid) => state.pantry[rid]);
+    const ticksCame = movedPantry.some((r) => r.source_entry_id && !r.source_purchase_id);
+    const folded = foldReceiptRows(state, ctx, ticksCame
+      ? Object.values(state.pantry).filter((r) => r.item_id === into.id) : movedPantry);
     // The receipts that moved confirm into's basket line (as purchase.add).
     const basketCleared = clearBasketForMoved(state, ctx, into, (rec.rows.purchases ?? []).map((pid) => state.purchases[pid]));
     for (const e of Object.values(state.entries)) {
@@ -2359,7 +2402,10 @@ const HANDLERS = {
     const aliasBefore = old ? { item_id: old.item_id, name: old.name, name_key: old.name_key, deleted_at: old.deleted_at ?? null } : null;
     rec.alias = { id: putAlias(state, ctx, into, from.name, `ma-${from.id}`), before: aliasBefore };
     from.undo_rows = rec;
-    return basketCleared.length ? { item_id: into.id, moved, cleared: basketCleared } : { item_id: into.id, moved };
+    const out = { item_id: into.id, moved };
+    if (folded) out.folded = folded;
+    if (basketCleared.length) out.cleared = basketCleared;
+    return out;
   },
 
   // A merge undone (30-10-2026: "Terugdraaien" on every line of the
@@ -2661,14 +2707,17 @@ const HANDLERS = {
       moved.products++;
     }
     const movedPurchases = [];
+    const movedPantry = [];
     for (const kind of ["purchases", "pantry", "pantry_events"]) {
       for (const row of Object.values(state[kind])) {
         if (!mine(row)) continue;
         moveRow(ctx, kind, row, target);
         moved[kind]++;
         if (kind === "purchases") movedPurchases.push(row);
+        if (kind === "pantry") movedPantry.push(row);
       }
     }
+    const folded = foldReceiptRows(state, ctx, movedPantry);
     // The receipts that moved confirm the target's basket line (as purchase.add).
     const basketCleared = clearBasketForMoved(state, ctx, target, movedPurchases);
     for (const row of Object.values(state.preferences)) {
@@ -2679,7 +2728,10 @@ const HANDLERS = {
       if (!mine(row)) continue;
       moved.deal_rules += moveScopedRow(ctx, "deal_rules", row, ruleRow(state, target.id, p.id), target, Object.keys(RULE_FIELDS));
     }
-    return basketCleared.length ? { item_id: target.id, moved, cleared: basketCleared } : { item_id: target.id, moved };
+    const out = { item_id: target.id, moved };
+    if (folded) out.folded = folded;
+    if (basketCleared.length) out.cleared = basketCleared;
+    return out;
   },
 
   // Another name for an item (30-10-2026: "Pluizenbolbrokkenman" is

@@ -824,3 +824,42 @@ export function supplyDays(rows) {
 export const entryPantryId = (entryId) => `pe-${entryId}`.slice(0, 64);
 /** The pantry row a receipt purchase makes when no tick came first. */
 export const purchasePantryId = (purchaseId) => `pp-${purchaseId}`.slice(0, 64);
+
+/** At most this many pairs, and ticks per receipt line, go to the nightly check (a short prompt input). */
+export const TICK_PAIRS_MAX = 10;
+export const TICK_PAIRS_TICKS_MAX = 4;
+
+/**
+ * The nightly check's input for the double of 06-11-2026 (Chinese groente):
+ * receipt lines with a product whose item nobody ticked or listed around that
+ * shopping day, next to the ticks of those days no receipt filled in (a row
+ * of a tick, no purchase; one cooked away counts, as matchPurchase), within
+ * MATCH_DAYS. Such a pair is probably one thing linked to two items.
+ * `noMove` is the household's "Laat staan" (decisionSets: "product id|item
+ * id"): a tick it was shown for is not offered again for that product. Pure,
+ * names and ids only: [{ day, purchase_id, product_id, item_id, ticks: [{ item_id, empty }] }].
+ */
+export function tickReceiptPairs({ pantry, purchases, products = {}, items = {}, noMove = new Set(), since = "" }) {
+  const rows = Object.values(pantry ?? {}).filter((r) => r.source_entry_id && r.item_id && (!r.deleted_at || r.taken > 0));
+  const near = (r, day) => Math.abs(daysBetween(r.added_on, day)) <= MATCH_DAYS;
+  const out = [];
+  const lines = Object.values(purchases ?? {})
+    .filter((p) => p && !p.deleted_at && p.source === "receipt" && p.product_id && p.item_id && String(p.bought_on) >= since)
+    .sort((a, b) => String(b.bought_on).localeCompare(String(a.bought_on)) || a.id.localeCompare(b.id));
+  for (const p of lines) {
+    const product = products[p.product_id];
+    if (isExcluded(p.title ?? "") || isExcluded(items[p.item_id]?.name ?? "") || (product && isExcluded(`${product.brand ?? ""} ${product.name ?? ""}`))) continue;
+    // Its own item was ticked around that day: the receipt matched it.
+    if (rows.some((r) => r.item_id === p.item_id && near(r, p.bought_on))) continue;
+    const ticks = [];
+    for (const r of rows) {
+      if (r.source_purchase_id || !near(r, p.bought_on) || ticks.some((t) => t.item_id === r.item_id)) continue;
+      if (noMove.has(`${p.product_id}|${r.item_id}`) || isExcluded(r.title ?? "")) continue;
+      ticks.push({ item_id: r.item_id, empty: Boolean(r.deleted_at) || !(r.amount > 0) });
+    }
+    if (!ticks.length) continue;
+    out.push({ day: p.bought_on, purchase_id: p.id, product_id: p.product_id, item_id: p.item_id, ticks: ticks.slice(0, TICK_PAIRS_TICKS_MAX) });
+    if (out.length >= TICK_PAIRS_MAX) break;
+  }
+  return out;
+}
