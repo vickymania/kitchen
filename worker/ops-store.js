@@ -1,7 +1,7 @@
 // D1 side of the op engine: load the rows an op needs, run public/shared/ops.js
 // on them, and write back what changed in one atomic batch, together with the
 // household's new change counter. Also serves the "what changed since N" pull.
-import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, findItem, aliasTarget, AUTO_CHANGES_DAYS, apartPair, decisionId } from "../public/shared/ops.js";
+import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, BASKET_OPEN_DAYS, findItem, aliasTarget, AUTO_CHANGES_DAYS, apartPair, decisionId } from "../public/shared/ops.js";
 import { nameKey } from "../public/shared/ingredients.js";
 import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pendingEventId, fromEntry } from "../public/shared/pantry.js";
 import { addDays } from "../public/shared/shelf-life.js";
@@ -212,13 +212,16 @@ async function loadRowProducts(db, hh, s) {
 /**
  * The basket lines a moved receipt may clear (clearBasketForMoved, as the
  * purchase.add loader): the checked, live lines ticked around the days of the
- * given receipt purchases. One range from the first day to the last.
+ * given receipt purchases, and the open ones made up to BASKET_OPEN_DAYS
+ * before them. One range from the first day to the last.
  */
 async function loadBasketForMoved(db, hh, s, purchases) {
   const days = purchases.filter((r) => r && !r.deleted_at && r.source === "receipt" && /^\d{4}-\d{2}-\d{2}$/.test(String(r.bought_on))).map((r) => r.bought_on).sort();
   if (!days.length) return;
   await loadInto(db, hh, s, "entries", "checked_at IS NOT NULL AND deleted_at IS NULL AND checked_at >= ? AND checked_at < ?",
     addDays(days[0], -BASKET_BEFORE_DAYS), addDays(days[days.length - 1], BASKET_AFTER_DAYS + 1));
+  await loadInto(db, hh, s, "entries", "checked_at IS NULL AND deleted_at IS NULL AND created_at >= ? AND created_at < ?",
+    addDays(days[0], -BASKET_OPEN_DAYS), addDays(days[days.length - 1], 1));
 }
 
 /** The "… gekookt?" rows of the loaded lines' recipes around `day` (a few). */
@@ -552,6 +555,9 @@ async function load(db, hh, op, memberId) {
         if (op.source === "receipt") {
           await loadInto(db, hh, s, "entries", "checked_at IS NOT NULL AND deleted_at IS NULL AND checked_at >= ? AND checked_at < ?",
             addDays(op.bought_on, -BASKET_BEFORE_DAYS), addDays(op.bought_on, BASKET_AFTER_DAYS + 1));
+          // ...and the open ones made up to BASKET_OPEN_DAYS before it.
+          await loadInto(db, hh, s, "entries", "checked_at IS NULL AND deleted_at IS NULL AND created_at >= ? AND created_at < ?",
+            addDays(op.bought_on, -BASKET_OPEN_DAYS), addDays(op.bought_on, 1));
         }
         await loadPrompts(db, hh, s, op.bought_on, Object.values(s.entries));
       }

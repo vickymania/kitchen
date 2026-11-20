@@ -72,7 +72,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!res.ok) throw new Error(`/api/sync: ${res.status}`);
   const data = stateOf(await res.json());
   const unsized = liveRows(data.pantry).filter((r) => !r.pack_size).length;
-  const plan = planSizes(data);
+  // --skip "<title>" (repeatable): leave that thing's rows alone (a pack counted in pieces whose amount is in pieces).
+  const skip = new Set(args.flatMap((a, i) => (a === "--skip" ? [args[i + 1]] : [])));
+  const plan = planSizes(data).filter(({ row }) => !skip.has(row.title));
   const ops = sizeOps(plan, localToday());
   const outcomes = simulate(data, ops);
   console.log(`Against ${origin}: ${unsized} pantry rows without a pack size; ${plan.length} get the household's pack.\n`);

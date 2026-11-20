@@ -371,23 +371,39 @@ export const BASKET_BEFORE_DAYS = 7;
 /** ...up to this many days after it (a receipt read the morning after). */
 export const BASKET_AFTER_DAYS = 1;
 
+/** An open line made up to this many days before the receipt's day is bought by it. */
+export const BASKET_OPEN_DAYS = 30;
+
 /**
- * A receipt purchase of `item` confirms the basket: its checked, live lines
- * of the same thing (the item, or one with the same canonical name:
- * item-names.js SAME) ticked within BASKET_BEFORE_DAYS before and
- * BASKET_AFTER_DAYS after `boughtOn` get a tombstone, as entry.clear_checked
- * does. Returns their ids. `except`: the line this purchase ticked itself.
+ * A receipt purchase of `item` confirms the basket: its live lines of the
+ * same thing (the item, or one with the same canonical name: item-names.js
+ * SAME) get a tombstone, as entry.clear_checked does. Returns their ids.
+ *  - checked lines ticked within BASKET_BEFORE_DAYS before and
+ *    BASKET_AFTER_DAYS after `boughtOn`;
+ *  - open lines made (created_at's day) on or before `boughtOn` and not more
+ *    than BASKET_OPEN_DAYS before it (20-11-2026: Handzeep listed
+ *    10-11, bought 17-11, the line stayed). A line made after the shopping
+ *    day stays: it is wanted again. `notePromptsOn`: a finished open recipe
+ *    line still gets its "... gekookt?" row for that day.
+ * `except`: the line this purchase ticked itself.
  */
-function clearBasketFor(state, ctx, item, boughtOn, except = null) {
+function clearBasketFor(state, ctx, item, boughtOn, except = null, notePromptsOn = null) {
   const key = canonicalName(item.name).key;
   const from = addDays(boughtOn, -BASKET_BEFORE_DAYS);
   const to = addDays(boughtOn, BASKET_AFTER_DAYS);
+  const openFrom = addDays(boughtOn, -BASKET_OPEN_DAYS);
   const cleared = [];
   for (const e of Object.values(state.entries)) {
-    if (!e || e.deleted_at || !e.checked_at || e.id === except) continue;
-    const day = String(e.checked_at).slice(0, 10);
-    if (day < from || day > to) continue;
+    if (!e || e.deleted_at || e.id === except) continue;
+    if (e.checked_at) {
+      const day = String(e.checked_at).slice(0, 10);
+      if (day < from || day > to) continue;
+    } else {
+      const made = String(e.created_at || "").slice(0, 10);
+      if (!made || made < openFrom || made > boughtOn) continue;
+    }
     if (e.item_id !== item.id && canonicalName(state.items[e.item_id]?.name ?? e.title).key !== key) continue;
+    if (!e.checked_at && notePromptsOn && e.sources?.length) notePrompt(state, ctx, e, notePromptsOn);
     e.deleted_at = ctx.now;
     e.updated_at = ctx.now;
     ctx.touch("entries", e.id);
@@ -399,8 +415,8 @@ function clearBasketFor(state, ctx, item, boughtOn, except = null) {
 /**
  * A receipt purchase that lands on an item later (item.merge, product.move,
  * a wrong guess fixed): it confirms the target's basket line like
- * purchase.add does, with the same window around its own day. Returns the
- * cleared ids. Only receipts; the history source and deleted rows never.
+ * purchase.add does, with the same windows around its own day (ticked and
+ * open lines). Returns the cleared ids. Only receipts; the history source and deleted rows never.
  */
 function clearBasketForMoved(state, ctx, target, purchases) {
   const cleared = [];
@@ -1696,9 +1712,10 @@ const HANDLERS = {
     }
     // The receipt leads (29-10-2026): the basket lines of this thing
     // ticked around the shopping day are done, the line this purchase just
-    // ticked itself too. Never an open line.
+    // ticked itself too; since 20-11-2026 an open line made on or before the
+    // day (30 days at most) as well. After the prompts above are noted.
     if (source === "receipt") {
-      const cleared = clearBasketFor(state, ctx, item, row.bought_on);
+      const cleared = clearBasketFor(state, ctx, item, row.bought_on, null, op.pantry === true && !op.entry_id ? row.bought_on : null);
       if (cleared.length) out.cleared = cleared;
     }
     // Into the pantry: the photo review always (a receipt of today), the AH

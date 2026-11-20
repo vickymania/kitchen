@@ -124,8 +124,9 @@ test("the alias: a receipt, a list line, a preference, a rate or the pantry that
   const { s } = tunaHouse();
   apply(s, MERGE);
   // The AH import's op as buildOps makes it: title "Tonijn", item_id = itemIdFor("Tonijn") = the tombstone's own id.
-  const r = apply(s, { type: "purchase.add", id: "purchase-merge-later", item_id: TONIJN, title: "Tonijn", bought_on: "2026-10-25",
+  const r = apply(s, { type: "purchase.add", id: "purchase-merge-later", item_id: TONIJN, title: "Tonijn", bought_on: "2026-10-19",
     store: "Albert Heijn", qty: 1, price_cents: 189, source: "receipt", product: tuna, pantry: true }, "2026-10-25");
+  // (bought the day before the line was made: a receipt finishes only lines made on or before its day)
   assert.equal(s.purchases["purchase-merge-later"].item_id, MINOES);
   assert.equal(s.pantry[r.result.pantry_id].item_id, MINOES, "the pantry counts the cat's tuna now");
   assert.ok(s.items[TONIJN].deleted_at, "the tombstone stays a tombstone: no new Tonijn");
