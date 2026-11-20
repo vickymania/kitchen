@@ -39,7 +39,7 @@ const op = (s, pantryId, day, reason = "used") =>
 // ------------------------------------------------------------ the constants
 
 test("the constants: weights per strength, a 25% cap, the windows", () => {
-  assert.deepEqual(SIGNALS, { op: "strong", list: "middle", not_yet: "middle", rebuy: "light" });
+  assert.deepEqual(SIGNALS, { op: "strong", list: "middle", not_yet: "middle", count: "middle", rebuy: "light" });
   assert.deepEqual(WEIGHTS, { strong: 0.5, middle: 0.3, light: 0.15 });
   assert.equal(MAX_STEP, 0.25);
   assert.deepEqual([MIN_SIGNAL_DAYS, LIST_LEAD_DAYS, LIST_SLACK_DAYS, REBUY_HIGH_DAYS, NOT_YET_DAYS], [3, 3, 7, 14, 3]);

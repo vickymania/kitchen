@@ -1,0 +1,11 @@
+-- The stocktake walk (20-11-2026: "ik denk dat mn hele voorraad
+-- inmiddels uit balans is"). Most pantry rows started as guesses on the day
+-- the pantry was set up, and nothing ever confirmed them. "Nalopen" on the
+-- Voorraad tab (public/app/pantry.js, public/shared/stocktake.js) asks per
+-- thing whether the amount is right.
+--
+-- pantry.checked_on: the day a person last confirmed or corrected this row's
+-- amount in the walk (op pantry.check). NULL: never. A row that came from a
+-- tick or a receipt counts as checked on the day it came in. No data to move,
+-- nothing gets a new rev.
+ALTER TABLE pantry ADD COLUMN checked_on TEXT;

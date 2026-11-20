@@ -287,6 +287,40 @@ export function householdPack(data, row, recipeId = "") {
   return null;
 }
 
+/** A pack as a row's pack_size: { qty: 1000, base: "ml" } -> "1 l", "500 g", "10 st". "" for none. */
+export function packText(pack) {
+  if (!pack || !(pack.qty > 0)) return "";
+  const q = round2(pack.qty);
+  if (pack.base === "g") return q >= 1000 && q % 1000 === 0 ? `${q / 1000} kg` : `${q} g`;
+  if (pack.base === "ml") return q >= 1000 && q % 1000 === 0 ? `${q / 1000} l` : `${q} ml`;
+  return `${q} st`;
+}
+
+/**
+ * The household's pack (householdPack) as the pack_size of a row that has
+ * none, or null: the row has a size already, the household knows none, or
+ * the pack is counted in pieces while the row holds more than 1 (then the row
+ * is most likely counted in pieces itself: "6 eieren" is not 6 boxes of 10).
+ * The row's amount never changes (tools/fill_pantry_sizes.mjs, a tick).
+ */
+export function sizeFor(data, row) {
+  if (!row || packSize(row.pack_size)) return null;
+  const pack = householdPack(data, row);
+  if (!pack || (pack.base === "piece" && Number(row.amount) > 1)) return null;
+  return packText(pack) || null;
+}
+
+/**
+ * The pack_size of the row a ticked line makes: the line's own (fromEntry),
+ * else the household's pack (sizeFor). A line counted in pieces ("6 st") keeps none.
+ */
+export function tickPackSize(data, entry, row) {
+  if (row.pack_size) return row.pack_size;
+  const a = (entry?.amounts ?? []).find((x) => x && x.text === undefined && x.qty > 0);
+  if (a && PIECE_UNITS.has(a.unit)) return "";
+  return sizeFor(data, row) ?? "";
+}
+
 const weighed = (pack) => Boolean(pack) && (pack.base === "g" || pack.base === "ml");
 
 /**

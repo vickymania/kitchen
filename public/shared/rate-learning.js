@@ -15,6 +15,11 @@
 //           nearly empty now (LIST_LEAD_DAYS left)
 //   middle  "Nog niet" (pantry.update with why "not_yet"): it lasts at least
 //           NOT_YET_DAYS longer than predicted
+//   middle  a count in the stocktake walk ("Minder" in "Nalopen", pantry.check
+//           with an amount under what was predicted): the stock went faster.
+//           implied = (stored - counted) / days. Counted by eye to a quarter,
+//           so less than "op". "Klopt" and "Meer" never teach: a "right" read
+//           to a quarter says too little, "more" is likely a forgotten pack
 //   light   a receipt rebuy without the item on the list: maybe nearly empty,
 //           maybe stocking up. Ignored on offer, for several at once, and when
 //           more than REBUY_HIGH_DAYS were predicted left
@@ -29,7 +34,7 @@ import { drainRows, RATE_MIN, RATE_MAX } from "./pantry.js";
 import { isExcluded } from "./excluded.js";
 
 /** Which strength each signal has. */
-export const SIGNALS = { op: "strong", list: "middle", not_yet: "middle", rebuy: "light" };
+export const SIGNALS = { op: "strong", list: "middle", not_yet: "middle", count: "middle", rebuy: "light" };
 /** How far one signal moves the rate toward what it implies (exponential smoothing). */
 export const WEIGHTS = { strong: 0.5, middle: 0.3, light: 0.15 };
 /** One signal never changes a rate by more than this: at most x1.25, at least /1.25. */
@@ -102,9 +107,14 @@ export function stockSnapshot(rows, item, day) {
  *   list     per_day x lasts / (days + LIST_LEAD_DAYS), outside LIST_SLACK_DAYS of the predicted end
  *   rebuy    as list, and not with more than REBUY_HIGH_DAYS predicted left
  *   not_yet  per_day x lasts / (max(lasts, days) + NOT_YET_DAYS)
+ *   count    (stored - counted) / days, only when counted is under what was predicted left
  */
-export function impliedRate(signal, snap) {
+export function impliedRate(signal, snap, { counted = null } = {}) {
   if (!snap || !(snap.per_day > 0)) return null;
+  if (signal === "count") {
+    if (!(counted >= 0) || snap.days < MIN_SIGNAL_DAYS || !(counted < snap.left) || !(snap.stored > counted)) return null;
+    return (snap.stored - counted) / snap.days;
+  }
   if (signal === "op") return snap.days >= MIN_SIGNAL_DAYS && snap.stored > 0 ? snap.stored / snap.days : null;
   if (signal === "list" || signal === "rebuy") {
     if (snap.days < MIN_SIGNAL_DAYS || !(snap.lasts > 0)) return null;
@@ -130,12 +140,13 @@ export function blendRate(current, implied, weight) {
 /**
  * What a signal teaches an item: { use_per_day, samples, implied, from } or
  * null. rows: the item's rows as they were before the op changed them.
+ * opts.counted: what a count found (the "count" signal).
  */
-export function learnRate(signal, item, rows, day) {
+export function learnRate(signal, item, rows, day, opts = {}) {
   const strength = SIGNALS[signal];
   if (!strength || !item || isExcluded(item.name)) return null;
   const snap = stockSnapshot(rows, item, day);
-  const implied = impliedRate(signal, snap);
+  const implied = impliedRate(signal, snap, opts);
   if (implied === null || !Number.isFinite(implied) || !(implied > 0)) return null;
   return {
     use_per_day: blendRate(snap.per_day, implied, WEIGHTS[strength]),

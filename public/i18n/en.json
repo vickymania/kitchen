@@ -486,6 +486,21 @@
     "more_left": "{name}: {n} more days counted.",
     "back_in": "{name} comes back in {n} days."
   },
+  "walk": {
+    "title": "Stocktake",
+    "count": { "one": "1 thing not checked", "other": "{n} things not checked" },
+    "start": "Check",
+    "right": "Right",
+    "less": "Less",
+    "more": "More",
+    "gone": "Gone",
+    "skip": "Skip",
+    "stop": "Stop",
+    "how_much": "How much is left?",
+    "pack": "pack",
+    "packs": "packs",
+    "done": "Everything is checked."
+  },
   "low": {
     "title": "Running low",
     "count": "Running low ({n})",

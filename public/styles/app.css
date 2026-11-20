@@ -377,6 +377,23 @@ footer.foot{margin:72px 0 40px;color:var(--mute)}
   .low-acts{grid-column:1;grid-row:auto;margin:4px 0 0 -10px}
   .low-acts .low-add{margin-left:10px}
 }
+/* "Nalopen" (the stocktake walk): the line is a quiet strip; the walk is one thing at a time, big thumb-sized answers. */
+.walk-line{border-left-color:var(--ink)}
+.walk-line .low-name{font-size:15px}
+.walk-head{margin:clamp(6px,1.5vw,14px) 0 clamp(14px,2.4vw,24px)}
+.walk-head .note{margin-left:auto}
+.walk-head .walk-stop{color:var(--mute)}
+.walk-bar{display:block;margin:0 0 clamp(22px,4vw,40px)}
+.walk-thing{padding:clamp(10px,2vw,18px) 0 clamp(18px,3vw,28px)}
+.walk-name{margin:0;font-weight:700;text-transform:uppercase;font-size:clamp(30px,7vw,64px);line-height:.95;overflow-wrap:anywhere;hyphens:auto}
+.walk-thinks{margin:12px 0 0;font-size:16px;letter-spacing:.06em;color:var(--mute)}
+.walk-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:560px}
+.walk-acts .btn{min-height:64px;font-size:14px;padding:0 8px}
+.walk-acts .walk-right{grid-column:1/-1}
+.walk-acts .walk-skip,.walk-acts .btn.ghost{grid-column:1/-1;min-height:44px;color:var(--mute)}
+.walk-less{grid-template-columns:repeat(3,1fr)}
+.walk-less .hint{grid-column:1/-1;margin:0}
+.walk-done{font-size:18px}
 /* The Voorraad tab: a low row says so in the signal colour; "waarschuw onder…" is the quiet fourth tap. */
 .entry.stock.low .amt-box{box-shadow:inset 0 -3px 0 var(--signal)}
 .entry.stock .low-mark{grid-column:2/5;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--signal);line-height:1.35}

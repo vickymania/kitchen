@@ -14,6 +14,7 @@ import { KEEPS, SHELF_DAYS_MAX, itemShelfDays, itemOpenedDays, addDays } from ".
 import { lowStock, lowByKey, stockKey, stockOf, underThreshold } from "../shared/low-stock.js";
 import { neededSoon, leftAmount, notYetOp, tickOps, NOT_YET_DAYS } from "../shared/needed-soon.js";
 import { soonOffers } from "../shared/deals.js";
+import { walkGroups, walkQueue, walkProgress, lessChoices, answerOp, amountParts } from "../shared/stocktake.js";
 import * as store from "./store.js";
 import { syncLine } from "./status.js";
 import { groceryTabs } from "./groceries.js";
@@ -598,6 +599,88 @@ export function useUpStrip(view, today) {
     h("span", { class: "use-up-go mono", "aria-hidden": "true" }, "→"));
 }
 
+// ------------------------------------------------------------- "Nalopen"
+
+// The walk (public/shared/stocktake.js): one thing at a time, one tap answers.
+// Open or not, and what was passed over, live only in this page: an answered
+// thing is checked today, so walking again resumes with what is left.
+const walk = { open: false, skip: new Set(), less: null, busy: false };
+
+/** "¾ pak · 1 l", "2", "1 pak · 500 g + ½ pak · 1 kg": what the app thinks. */
+export function thinksText(group) {
+  return amountParts(group).map(({ amount, size }) => (size
+    ? `${packsText(amount)} ${t(displayAmount(amount) > 1 ? "walk.packs" : "walk.pack")} · ${size}`
+    : packsText(amount))).join(" + ");
+}
+
+/** The line on the Voorraad tab: "58 dingen niet nagelopen" + "Nalopen". Null when nothing waits. */
+function walkLine(queue, rerender) {
+  if (!queue.length) return null;
+  return h("section", { class: "low-strip walk-line", "aria-label": t("walk.title") },
+    h("div", { class: "low-row" },
+      h("span", { class: "low-name" }, t("walk.count", { n: queue.length })),
+      h("span", { class: "low-acts" },
+        h("button", { type: "button", class: "btn ghost mono low-add", onclick: () => { walk.open = true; walk.less = null; rerender(); } }, t("walk.start")))));
+}
+
+async function answer(group, kind, amount = null) {
+  if (walk.busy) return;
+  walk.busy = true;
+  walk.less = null;
+  try {
+    if (kind === "gone") {
+      const takes = group.rows.slice(0, 40).map((r) => ({ event_id: newId(), pantry_id: r.id, amount: null }));
+      await store.dispatch({ type: "pantry.use", reason: "used", on: localToday(), takes });
+      toast(t("pantry.used_done", { title: group.name }), {
+        action: t("pantry.undo"), ms: 7000,
+        onAction: () => store.dispatch({ type: "pantry.unuse", event_ids: takes.map((x) => x.event_id) }).catch(refused),
+      });
+    } else {
+      const op = answerOp(group, kind, localToday(), amount);
+      if (op) await store.dispatch(op);
+    }
+  } catch (err) {
+    refused(err);
+  } finally {
+    walk.busy = false;
+  }
+}
+
+/** The walk itself: the progress, the thing, four answers. */
+function walkCard(view, groups, queue, rerender) {
+  const { done, total } = walkProgress(groups);
+  const stop = h("button", { type: "button", class: "btn ghost mono walk-stop", onclick: () => { walk.open = false; walk.less = null; rerender(); } }, t("walk.stop"));
+  const head = h("div", { class: "section-head walk-head" }, h("h2", {}, t("walk.title")),
+    h("span", { class: "note mono" }, `${Math.min(done + 1, total)} / ${total}`), stop);
+  const fillBar = h("i", {});
+  // Through the CSSOM: the page's CSP refuses inline style attributes.
+  fillBar.style.width = `${total ? Math.round((done / total) * 100) : 100}%`;
+  const bar = h("div", { class: "sig-bar walk-bar", "aria-hidden": "true" }, fillBar);
+  const g = queue[0];
+  if (!g) {
+    return h("section", { class: "walk" }, head, bar,
+      h("p", { class: "walk-done" }, t("walk.done")),
+      h("div", { class: "walk-acts" }, h("button", { type: "button", class: "btn primary", onclick: () => { walk.open = false; rerender(); } }, t("common.close"))));
+  }
+  const less = lessChoices(g.amount);
+  const acts = walk.less === g.item_id
+    ? h("div", { class: "walk-acts walk-less" },
+      h("p", { class: "hint" }, t("walk.how_much")),
+      less.map((n) => h("button", { type: "button", class: "btn", onclick: () => answer(g, "less", n) }, packsText(n))),
+      h("button", { type: "button", class: "btn ghost mono", onclick: () => { walk.less = null; rerender(); } }, t("common.cancel")))
+    : h("div", { class: "walk-acts" },
+      h("button", { type: "button", class: "btn primary walk-right", onclick: () => answer(g, "right") }, t("walk.right")),
+      less.length ? h("button", { type: "button", class: "btn", onclick: () => { walk.less = g.item_id; rerender(); } }, t("walk.less")) : null,
+      h("button", { type: "button", class: "btn", onclick: () => answer(g, "more") }, t("walk.more")),
+      h("button", { type: "button", class: "btn", onclick: () => answer(g, "gone") }, t("walk.gone")),
+      h("button", { type: "button", class: "btn ghost mono walk-skip", onclick: () => { walk.skip.add(g.item_id); rerender(); } }, t("walk.skip")));
+  return h("section", { class: "walk", "aria-live": "polite" }, head, bar,
+    h("div", { class: "walk-thing" },
+      h("p", { class: "walk-name" }, shownName(view, g.name)),
+      h("p", { class: "walk-thinks mono" }, thinksText(g))),
+    acts);
+}
+
 export function mountPantry(root) {
   const eyebrow = h("div", { class: "eyebrow mono" });
   const body = h("div", {});
@@ -617,14 +700,17 @@ export function mountPantry(root) {
       refused(err);
     }
   };
+  const addForm = h("form", { class: "add", onsubmit: add }, input, h("button", { type: "submit", class: "btn primary", "aria-label": t("pantry.add") }, "+"));
   root.append(
     h("section", { class: "hero wrap" }, eyebrow, title(t("pantry.title"))),
     groceryTabs("pantry"),
     h("div", { class: "wrap" },
-      h("form", { class: "add", onsubmit: add }, input, h("button", { type: "submit", class: "btn primary", "aria-label": t("pantry.add") }, "+")),
+      addForm,
       body),
   );
-  return store.subscribe((stored, status) => {
+  let last = null;
+  const render = (stored, status) => {
+    last = [stored, status];
     const today = localToday();
     // What is left today: counted-down rows (the cat's pouches) at their live amount.
     const view = withUsage(stored, today);
@@ -632,15 +718,27 @@ export function mountPantry(root) {
     const waste = wasteCounts(view.pantry_events);
     const lows = lowByKey(view, today);
     const line = (r) => row(r, today, waste, view, lows);
+    const groups = walkGroups(view, today, { memberId: store.getMe()?.member?.id ?? null });
+    const queue = walkQueue(groups, walk.skip);
+    const rerender = () => render(...last);
     fill(eyebrow,
       h("span", {}, h("b", {}, t("pantry.count", { n: due.length + rest.length }))),
       due.length ? h("span", {}, t("pantry.due_count", { n: due.length })) : null,
       syncLine(status));
+    // The walk takes the tab while it is open: one thing at a time.
+    if (walk.open) {
+      addForm.hidden = true;
+      fill(body, walkCard(view, groups, queue, rerender));
+      return;
+    }
+    addForm.hidden = false;
     fill(body,
+      walkLine(queue, rerender),
       due.length + rest.length ? null : h("p", { class: "empty" }, t("pantry.empty")),
       due.length ? h("div", { class: "section-head" }, h("h2", {}, t("pantry.due_title"))) : null,
       due.length ? h("ul", { class: "entries" }, due.map(line)) : null,
       due.length && rest.length ? h("div", { class: "section-head" }, h("h2", {}, t("pantry.rest_title"))) : null,
       rest.length ? h("ul", { class: "entries" }, rest.map(line)) : null);
-  });
+  };
+  return store.subscribe(render);
 }

@@ -17,7 +17,7 @@ import { UNIT_CODES, nameKey, mergeAmounts } from "./ingredients.js";
 import { isExcluded } from "./excluded.js";
 import { canonicalStore, sameStore } from "./stores.js";
 import { isStarValue } from "./recipe-ratings.js";
-import { fromEntry, matchPurchase, round2, entryPantryId, purchasePantryId, parseLowAt, LOW_AT_MAX, drainRows, rowRate, rateEventId, RATE_MAX, RATE_MIN, RATE_SOURCES, RATE_RANK, pendingFits, pendingNeed, pendingEventId, PENDING_MAX } from "./pantry.js";
+import { fromEntry, matchPurchase, round2, entryPantryId, purchasePantryId, parseLowAt, LOW_AT_MAX, drainRows, rowRate, rateEventId, RATE_MAX, RATE_MIN, RATE_SOURCES, RATE_RANK, pendingFits, pendingNeed, pendingEventId, PENDING_MAX, packSize, tickPackSize } from "./pantry.js";
 import { estimateUseBy, addDays, KEEPS, SHELF_DAYS_MAX, SHELF_SOURCES, SHELF_RANK, openedDaysOf, itemShelfDays, openedUseBy } from "./shelf-life.js";
 import { CUISINES, MAIN_INGREDIENTS, TIME_CLASSES, MEALS, LABELS_BY, LABEL_FIELDS, sortMeals } from "./labels.js";
 import { isKind, kindFromCategory, kindFromName } from "./product-kinds.js";
@@ -43,7 +43,7 @@ export const OP_TYPES = [
   "product.put", "product.shelf", "item.prefer", "item.again", "item.rename", "item.low", "item.not_yet", "item.shelf", "item.rate", "rating.set", "receipt.save", "purchase.add", "purchase.delete",
   "recipe.cooked", "recipe.uncooked", "recipe.cook_prompt", "recipe.rate",
   "preference.set", "preference.clear",
-  "pantry.add", "pantry.update", "pantry.use", "pantry.unuse", "pantry.remove", "pantry.pend", "pantry.unpend",
+  "pantry.add", "pantry.update", "pantry.use", "pantry.unuse", "pantry.remove", "pantry.pend", "pantry.unpend", "pantry.check",
   "deal_rule.set", "deal_rule.clear",
   "item.merge", "product.move", "item.alias", "item.private",
   "prices.sync",
@@ -722,7 +722,9 @@ function stockFromEntry(state, ctx, e, day) {
   const prev = state.pantry[pid];
   // Still there, already eaten from, or already a receipt's row: leave it.
   if (prev && (!prev.deleted_at || prev.taken > 0 || prev.source_purchase_id)) return;
-  const { amount, pack_size } = fromEntry(e);
+  const { amount, pack_size: own } = fromEntry(e);
+  // No size on the line: the household's own pack of the thing (20-11-2026).
+  const pack_size = tickPackSize(state, e, { item_id: e.item_id, product_id: null, amount, pack_size: own });
   state.pantry[pid] = {
     created_by: ctx.memberId, created_at: ctx.now, ...(prev ?? {}),
     id: pid, item_id: e.item_id, product_id: null, title: e.title, amount, taken: 0, pack_size, added_on: day, amount_on: null,
@@ -879,9 +881,9 @@ function itemRows(state, itemId) {
  * today stays (as item.rate does). The rate becomes "learned", one more
  * sample. Returns the lesson or null.
  */
-function teach(state, ctx, item, signal, rows, day, { settle = false } = {}) {
+function teach(state, ctx, item, signal, rows, day, { settle = false, counted = null } = {}) {
   if (!item || item.deleted_at || isExcluded(item.name)) return null;
-  const lesson = learnRate(signal, item, rows, day);
+  const lesson = learnRate(signal, item, rows, day, { counted });
   if (!lesson) return null;
   if (settle) settleUsage(state, ctx, item.id, day, { item: { ...item } });
   item.use_per_day = lesson.use_per_day;
@@ -1858,8 +1860,75 @@ const HANDLERS = {
       row.use_by = op.use_by === null ? null : date(op.use_by, "use_by");
       row.use_by_source = "person";
     }
+    // The size of one pack (tools/fill_pantry_sizes.mjs): the amount stays.
+    // A countdown by pieces in the pack may change with it: settled first,
+    // so what is shown today stays.
+    if ("pack_size" in op) {
+      const size = text(op.pack_size, 40, "pack_size");
+      if (!packSize(size)) throw new OpError("bad_field", "pack_size");
+      if (size !== row.pack_size) {
+        settleUsage(state, ctx, row.item_id, dayOf(op, ctx));
+        row.pack_size = size;
+      }
+    }
     row.updated_at = ctx.now;
     ctx.touch("pantry", row.id);
+    return {};
+  },
+
+  // The stocktake walk ("Nalopen", public/shared/stocktake.js): the rows of
+  // one item looked at. { ids, on, amount? }. Without amount ("Klopt") each
+  // row is confirmed as it is shown today. With amount (the item's new total
+  // in packs, > 0; "Minder", "Meer") less comes off the oldest rows first (the
+  // order they are used), more goes on the newest. Every row gets checked_on
+  // = on. A total under what was shown teaches the rate (rate-learning.js
+  // "count"); "Klopt" and more never do. "Op" is pantry.use, as everywhere.
+  "pantry.check"(state, op, ctx) {
+    if (!Array.isArray(op.ids) || !op.ids.length || op.ids.length > 40) throw new OpError("bad_field", "ids");
+    const ids = op.ids.map((x) => id(x, "ids"));
+    const has = "amount" in op && op.amount !== undefined;
+    const total = has ? packs(op.amount) : null;
+    if (has && !(total > 0)) throw new OpError("bad_field", "amount");
+    const rows = ids.map((x) => state.pantry[x]).filter((r) => r && !r.deleted_at);
+    if (!rows.length) return {};
+    const itemId = rows[0].item_id;
+    if (rows.some((r) => r.item_id !== itemId)) throw new OpError("bad_field", "ids");
+    const day = dayOf(op, ctx);
+    const before = itemRows(state, itemId);
+    // What is shown today becomes what is true today (a counted-down item).
+    settleUsage(state, ctx, itemId, day);
+    const order = rows.filter((r) => !r.deleted_at)
+      .sort((a, b) => a.added_on.localeCompare(b.added_on) || a.id.localeCompare(b.id));
+    let lower = false;
+    if (has && order.length) {
+      const shown = round2(order.reduce((sum, r) => sum + r.amount, 0));
+      lower = total < shown;
+      if (lower) {
+        let off = round2(shown - total);
+        for (const r of order) {
+          if (!(off > 0)) break;
+          const take = Math.min(off, r.amount);
+          r.amount = round2(r.amount - take);
+          off = round2(off - take);
+          r.amount_on = day;
+          finishIfEmpty(r, ctx);
+          if (!r.deleted_at) openedRow(state, r, r.added_on);
+        }
+      } else if (total > shown) {
+        const newest = order[order.length - 1];
+        newest.amount = round2(newest.amount + total - shown);
+        newest.amount_on = day;
+      }
+    }
+    for (const r of rows) {
+      r.checked_on = day;
+      r.updated_at = ctx.now;
+      ctx.touch("pantry", r.id);
+    }
+    if (lower) {
+      const counted = round2(Object.values(state.pantry).filter((r) => r.item_id === itemId && !r.deleted_at).reduce((sum, r) => sum + r.amount, 0));
+      teach(state, ctx, state.items[itemId], "count", before, day, { counted });
+    }
     return {};
   },
 

@@ -3,7 +3,7 @@
 // household's new change counter. Also serves the "what changed since N" pull.
 import { applyOp, emptyState, OpError, productKey, cookPromptId, BASKET_BEFORE_DAYS, BASKET_AFTER_DAYS, findItem, aliasTarget, AUTO_CHANGES_DAYS, apartPair, decisionId } from "../public/shared/ops.js";
 import { nameKey } from "../public/shared/ingredients.js";
-import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pendingEventId } from "../public/shared/pantry.js";
+import { entryPantryId, purchasePantryId, MATCH_DAYS, PENDING_DAYS, rowRate, pendingEventId, fromEntry } from "../public/shared/pantry.js";
 import { addDays } from "../public/shared/shelf-life.js";
 import { OFFER_HISTORY } from "../public/shared/rate-learning.js";
 import { canonicalStore } from "../public/shared/stores.js";
@@ -45,7 +45,7 @@ const COLUMNS = {
   cooks: ["id", "recipe_id", "member_id", "cooked_on", "created_at", "deleted_at"],
   preferences: ["id", "item_id", "store", "recipe_id", "product_id", "created_by", "created_at", "updated_at", "deleted_at"],
   pantry: ["id", "item_id", "product_id", "title", "amount", "taken", "pack_size", "added_on", "amount_on", "use_by", "use_by_source",
-    "source_entry_id", "source_purchase_id", "created_by", "created_at", "updated_at", "deleted_at"],
+    "source_entry_id", "source_purchase_id", "created_by", "created_at", "updated_at", "deleted_at", "checked_on"],
   pantry_events: ["id", "pantry_id", "item_id", "product_id", "reason", "amount", "recipe_id", "happened_on", "member_id",
     "created_at", "deleted_at", "rate_before"],
   deal_rules: ["id", "item_id", "product_id", "max_price_cents", "offer_only", "min_discount_pct", "max_unit_price_cents", "unit",
@@ -197,6 +197,14 @@ async function loadPantryForPurchase(db, hh, s, op) {
 }
 
 /** The products of the loaded pantry rows: their own shelf life comes first. */
+/** What householdPack (public/shared/pantry.js) reads for one item. */
+async function loadHouseholdPack(db, hh, s, itemId) {
+  await loadInto(db, hh, s, "preferences", "item_id = ? AND deleted_at IS NULL", itemId);
+  await loadInto(db, hh, s, "purchases", "item_id = ? AND deleted_at IS NULL AND product_id IS NOT NULL", itemId);
+  await loadIds(db, hh, s, "products", [...Object.values(s.preferences), ...Object.values(s.purchases)]
+    .filter((x) => x.item_id === itemId).map((x) => x.product_id));
+}
+
 async function loadRowProducts(db, hh, s) {
   await loadIds(db, hh, s, "products", Object.values(s.pantry).map((r) => r.product_id));
 }
@@ -574,7 +582,15 @@ async function load(db, hh, op, memberId) {
       for (const r of Object.values(s.pantry)) await loadInto(db, hh, s, "items", "id = ?", r.item_id);
       await loadRowProducts(db, hh, s);
       // A corrected amount settles a counted-down item's other rows.
-      if (op.type === "pantry.update" && ("amount" in op || "add_days" in op)) await loadCountedDown(db, hh, s);
+      if (op.type === "pantry.update" && ("amount" in op || "add_days" in op || "pack_size" in op)) await loadCountedDown(db, hh, s);
+      break;
+    case "pantry.check":
+      // The walk's rows of one item, their item and products (an opened
+      // pack's date), and every live row of a counted-down item (settled first).
+      await loadIds(db, hh, s, "pantry", Array.isArray(op.ids) ? op.ids.slice(0, 40) : []);
+      await loadIds(db, hh, s, "items", Object.values(s.pantry).map((r) => r.item_id));
+      await loadRowProducts(db, hh, s);
+      await loadCountedDown(db, hh, s);
       break;
     case "pantry.use": {
       const takes = Array.isArray(op.takes) ? op.takes.slice(0, 40) : [];
@@ -664,6 +680,9 @@ async function load(db, hh, op, memberId) {
         await loadInto(db, hh, s, "pantry", "id = ?", entryPantryId(String(op.id)));
         const e = s.entries[op.id];
         if (e?.item_id && !s.items[e.item_id]) await loadInto(db, hh, s, "items", "id = ?", e.item_id);
+        // A line without a size gets the household's pack (householdPack): the
+        // item's preferences, its purchases with a product, those products.
+        if (e?.item_id && !fromEntry(e).pack_size) await loadHouseholdPack(db, hh, s, e.item_id);
         // A line for a recipe: that recipe's "… gekookt?" rows.
         if (e?.sources?.length) await loadPrompts(db, hh, s, opDay(op), [e]);
       }

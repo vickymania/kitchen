@@ -486,6 +486,21 @@
     "more_left": "{name}: {n} dagen extra geteld.",
     "back_in": "{name} komt over {n} dagen terug."
   },
+  "walk": {
+    "title": "Nalopen",
+    "count": { "one": "1 ding niet nagelopen", "other": "{n} dingen niet nagelopen" },
+    "start": "Nalopen",
+    "right": "Klopt",
+    "less": "Minder",
+    "more": "Meer",
+    "gone": "Op",
+    "skip": "Overslaan",
+    "stop": "Stoppen",
+    "how_much": "Hoeveel is er nog?",
+    "pack": "pak",
+    "packs": "pakken",
+    "done": "Alles is nagelopen."
+  },
   "low": {
     "title": "Bijna op",
     "count": "Bijna op ({n})",

@@ -90,6 +90,7 @@ const SHELL = [
   "/shared/deals.js",
   "/shared/low-stock.js",
   "/shared/needed-soon.js",
+  "/shared/stocktake.js",
   "/shared/list-groups.js",
   "/fonts/chakra-petch-400-latin.woff2",
   "/fonts/chakra-petch-500-latin.woff2",
